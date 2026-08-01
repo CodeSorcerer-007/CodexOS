@@ -1,0 +1,126 @@
+import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+
+export const ZKPVault = () => {
+  const [vaultData, setVaultData] = useState('Secret Source Code 123');
+  const [secretKey, setSecretKey] = useState('super_secret_key');
+  const [proof, setProof] = useState<string | null>(null);
+  
+  const [verifyProof, setVerifyProof] = useState('');
+  const [verifyData, setVerifyData] = useState('Secret Source Code 123');
+  const [verifyKey, setVerifyKey] = useState('super_secret_key');
+  const [isValid, setIsValid] = useState<boolean | null>(null);
+
+  const generateProof = async () => {
+    try {
+      const p = await invoke<string>('generate_zk_proof', { vaultData, secretKey });
+      setProof(p);
+      setVerifyProof(p);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleVerify = async () => {
+    try {
+      const valid = await invoke<boolean>('verify_zk_proof', { 
+        proofHash: verifyProof, 
+        expectedVaultData: verifyData,
+        secretKey: verifyKey 
+      });
+      setIsValid(valid);
+    } catch (e) {
+      console.error(e);
+      setIsValid(false);
+    }
+  };
+
+  return (
+    <div className="flex h-full w-full bg-[#0a0f18] text-white">
+      {/* Prover Section */}
+      <div className="w-1/2 border-r border-white/10 p-6 flex flex-col gap-6">
+        <div>
+          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">ZKP Generator (Prover)</h2>
+          <p className="text-sm text-gray-400">Mathematically prove you possess a vault without transmitting it.</p>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Vault Payload (Simulated)</label>
+          <textarea 
+            value={vaultData}
+            onChange={e => setVaultData(e.target.value)}
+            className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-fuchsia-500 focus:outline-none transition-colors mb-4 h-24"
+          />
+
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Secret ZK Key</label>
+          <input 
+            type="text"
+            value={secretKey}
+            onChange={e => setSecretKey(e.target.value)}
+            className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-fuchsia-500 focus:outline-none transition-colors mb-6"
+          />
+
+          <button 
+            onClick={generateProof}
+            className="w-full px-4 py-3 bg-fuchsia-600 hover:bg-fuchsia-500 rounded font-bold transition-colors shadow-[0_0_15px_rgba(192,38,211,0.3)]"
+          >
+            Generate SNARK Proof
+          </button>
+        </div>
+
+        {proof && (
+          <div className="mt-4 p-4 bg-black border border-white/10 rounded-lg">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Generated Proof Hash</h3>
+            <div className="text-fuchsia-300 font-mono text-xs break-all">{proof}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Verifier Section */}
+      <div className="flex-1 p-6 flex flex-col gap-6 bg-black/40">
+        <div>
+          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">ZKP Verifier</h2>
+          <p className="text-sm text-gray-400">Verify a peer's vault commitment.</p>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Received Proof</label>
+          <input 
+            type="text"
+            value={verifyProof}
+            onChange={e => setVerifyProof(e.target.value)}
+            className="w-full bg-black/50 border border-white/10 rounded p-3 text-fuchsia-300 font-mono text-sm focus:border-fuchsia-500 focus:outline-none transition-colors mb-4"
+          />
+
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Expected Vault Data</label>
+          <textarea 
+            value={verifyData}
+            onChange={e => setVerifyData(e.target.value)}
+            className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-fuchsia-500 focus:outline-none transition-colors mb-4 h-24"
+          />
+
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Verification Key</label>
+          <input 
+            type="text"
+            value={verifyKey}
+            onChange={e => setVerifyKey(e.target.value)}
+            className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-fuchsia-500 focus:outline-none transition-colors mb-6"
+          />
+
+          <button 
+            onClick={handleVerify}
+            className="w-full px-4 py-3 bg-white/10 hover:bg-white/20 rounded font-bold transition-colors"
+          >
+            Verify Proof
+          </button>
+        </div>
+
+        {isValid !== null && (
+          <div className={`mt-4 p-4 rounded-lg border font-bold text-center ${isValid ? 'bg-green-500/20 border-green-500/50 text-green-400' : 'bg-red-500/20 border-red-500/50 text-red-400'}`}>
+            {isValid ? '✅ CRYPTOGRAPHIC PROOF VERIFIED' : '❌ INVALID PROOF - TAMPERING DETECTED'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
