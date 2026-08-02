@@ -26,7 +26,8 @@
     "web-tree-sitter": "^0.26.11",
     "xterm": "^5.3.0",
     "xterm-addon-fit": "^0.8.0",
-    "yjs": "^13.6.31"
+    "yjs": "^13.6.31",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

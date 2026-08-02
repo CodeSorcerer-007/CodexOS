@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { HardDrive, Network, ShieldAlert, Cpu, TerminalSquare, GitBranch, Key, Activity, Layers, Webhook } from 'lucide-react';
+import { Network, ShieldAlert, Cpu, TerminalSquare, GitBranch, Key, Activity, Layers, Webhook } from 'lucide-react';
 import type { Tab } from '../App';
 
 interface DashboardProps {

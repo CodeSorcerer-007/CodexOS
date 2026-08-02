@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface GitStatus {
@@ -20,7 +20,7 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
   const [commitMsg, setCommitMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const refreshGit = async () => {
+  const refreshGit = useCallback(async () => {
     if (!currentPath) return;
     setLoading(true);
     try {
@@ -34,11 +34,11 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPath]);
 
   useEffect(() => {
     refreshGit();
-  }, [currentPath]);
+  }, [refreshGit]);
 
   const handleAction = async (args: string[]) => {
     if (!currentPath) return;
@@ -138,7 +138,7 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
       <div className="flex-1 flex flex-col p-6 bg-black/20">
         <h2 className="font-bold text-gray-300 mb-4">Commit History</h2>
         <div className="flex-1 overflow-y-auto relative border-l-2 border-white/10 pl-6 ml-2">
-          {history.map((commit, i) => (
+          {history.map((commit, _i) => (
             <div key={commit.hash} className="mb-8 relative">
               <div className="absolute -left-[31px] top-1 w-3 h-3 bg-cyan-500 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.8)]" />
               <div className="bg-black/40 border border-white/10 rounded-lg p-4 hover:border-cyan-500/50 transition-colors">

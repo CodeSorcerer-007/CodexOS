@@ -7,7 +7,7 @@
   A blazingly fast, deeply integrated system explorer and control center built on Rust, Tauri 2.0, and React.
 
   [![Built with Tauri](https://img.shields.io/badge/Built_with-Tauri_2.0-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](#)
-  [![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](#)
+  [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](#)
   [![Rust](https://img.shields.io/badge/Rust-1.75+-000000?style=for-the-badge&logo=rust&logoColor=white)](#)
 </div>
 
@@ -36,9 +36,14 @@ Vaultly v2 is packed with high-performance native modules executing completely o
 
 ## 🛠️ Tech Stack
 
-- **Frontend:** React 18, Vite, Framer Motion, Tailwind CSS v4, Lucide React
+- **Frontend:** React 19, Vite, Zustand, Framer Motion, Tailwind CSS v4, Lucide React
 - **Backend:** Rust, Tauri 2.0, Wasmtime (WASI), Tokio, Ring (Cryptography), Git2, SQLite, Sysinfo
 - **Styling:** Custom sleek dark mode with hardware-accelerated micro-animations, glassmorphism, and hidden scrollbars.
+
+## 🏗️ Architecture
+- **Fault-Tolerant UI**: Global React Error Boundaries ensure individual plugin crashes never take down the dashboard.
+- **Lightning-Fast Code-Splitting**: Deep integration with React.lazy and Suspense guarantees that 20+ heavy plugin modules are lazy-loaded on demand.
+- **Global Store**: Robust, prop-drilling-free state management powered by Zustand.
 
 ## ⚙️ How to Build & Run
 

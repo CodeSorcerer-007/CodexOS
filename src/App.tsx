@@ -1,28 +1,31 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, HardDrive, Network, GitBranch, TerminalSquare, Settings, Workflow, Box, ShieldAlert, Zap, BookOpen, Layers, MonitorPlay, Key, Webhook } from 'lucide-react';
+import { LayoutDashboard, HardDrive, Network, GitBranch, TerminalSquare, Settings, Workflow, Box, ShieldAlert, Zap, Layers, MonitorPlay, Key, Webhook } from 'lucide-react';
 
-import { FileGrid } from './components/FileGrid';
-import { DockerDashboard } from './components/DockerDashboard';
-import { NetworkInterceptor } from './components/NetworkInterceptor';
-import { DatabaseStudio } from './components/DatabaseStudio';
-import { VisualGit } from './components/VisualGit';
-import { DevDocsViewer } from './components/DevDocsViewer';
-import { TerminalMultiplexer } from './components/TerminalMultiplexer';
-import { AutomationStudio } from './components/AutomationStudio';
-import { PluginManager } from './components/PluginManager';
-import { SandboxManager } from './components/SandboxManager';
-import { LocalAI } from './components/LocalAI';
-import { MemoryProfiler } from './components/MemoryProfiler';
-import { PluginMarketplace } from './components/PluginMarketplace';
-import { ASTRefactor } from './components/ASTRefactor';
-import { ZKPVault } from './components/ZKPVault';
-import { GPUCluster } from './components/GPUCluster';
-import { CollaborativeEditor } from './components/CollaborativeEditor';
-import { SecretsManager } from './components/SecretsManager';
-import { PortTunnel } from './components/PortTunnel';
-import { VaultlyDashboard } from './components/VaultlyDashboard';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { useStore } from './store/store';
+
+const FileGrid = lazy(() => import('./components/FileGrid').then(m => ({ default: m.FileGrid })));
+const DockerDashboard = lazy(() => import('./components/DockerDashboard').then(m => ({ default: m.DockerDashboard })));
+const NetworkInterceptor = lazy(() => import('./components/NetworkInterceptor').then(m => ({ default: m.NetworkInterceptor })));
+const DatabaseStudio = lazy(() => import('./components/DatabaseStudio').then(m => ({ default: m.DatabaseStudio })));
+const VisualGit = lazy(() => import('./components/VisualGit').then(m => ({ default: m.VisualGit })));
+const DevDocsViewer = lazy(() => import('./components/DevDocsViewer').then(m => ({ default: m.DevDocsViewer })));
+const TerminalMultiplexer = lazy(() => import('./components/TerminalMultiplexer').then(m => ({ default: m.TerminalMultiplexer })));
+const AutomationStudio = lazy(() => import('./components/AutomationStudio').then(m => ({ default: m.AutomationStudio })));
+const PluginManager = lazy(() => import('./components/PluginManager').then(m => ({ default: m.PluginManager })));
+const SandboxManager = lazy(() => import('./components/SandboxManager').then(m => ({ default: m.SandboxManager })));
+const LocalAI = lazy(() => import('./components/LocalAI').then(m => ({ default: m.LocalAI })));
+const MemoryProfiler = lazy(() => import('./components/MemoryProfiler').then(m => ({ default: m.MemoryProfiler })));
+const PluginMarketplace = lazy(() => import('./components/PluginMarketplace').then(m => ({ default: m.PluginMarketplace })));
+const ASTRefactor = lazy(() => import('./components/ASTRefactor').then(m => ({ default: m.ASTRefactor })));
+const ZKPVault = lazy(() => import('./components/ZKPVault').then(m => ({ default: m.ZKPVault })));
+const GPUCluster = lazy(() => import('./components/GPUCluster').then(m => ({ default: m.GPUCluster })));
+const CollaborativeEditor = lazy(() => import('./components/CollaborativeEditor').then(m => ({ default: m.CollaborativeEditor })));
+const SecretsManager = lazy(() => import('./components/SecretsManager').then(m => ({ default: m.SecretsManager })));
+const PortTunnel = lazy(() => import('./components/PortTunnel').then(m => ({ default: m.PortTunnel })));
+const VaultlyDashboard = lazy(() => import('./components/VaultlyDashboard').then(m => ({ default: m.VaultlyDashboard })));
 
 export interface Tab {
   id: string;
@@ -59,14 +62,18 @@ function Cpu(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/
 function Store(props: any) { return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"></path><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"></path><path d="M2 7h20"></path><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"></path></svg>; }
 
 function App() {
-  const [activeApp, setActiveApp] = useState<Tab['activeApp']>('home');
-  const [currentPath, setCurrentPath] = useState<string | null>(null);
+  const activeApp = useStore(state => state.activeApp);
+  const setActiveApp = useStore(state => state.setActiveApp);
+  const currentPath = useStore(state => state.currentPath);
+  const setCurrentPath = useStore(state => state.setCurrentPath);
+  const selectedFile = useStore(state => state.selectedFile);
+  const setSelectedFile = useStore(state => state.setSelectedFile);
 
   // Simple render map for animations
   const renderApp = () => {
     switch(activeApp) {
       case 'home': return <VaultlyDashboard onOpenApp={setActiveApp} />;
-      case 'files': return <FileGrid currentPath={currentPath || ""} onNavigate={setCurrentPath} />;
+      case 'files': return <FileGrid currentPath={currentPath || ""} onNavigate={setCurrentPath} selectedFile={selectedFile} onSelect={setSelectedFile} />;
       case 'docker': return <DockerDashboard />;
       case 'network': return <NetworkInterceptor />;
       case 'database': return <DatabaseStudio />;
@@ -170,7 +177,16 @@ function App() {
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="w-full h-full absolute inset-0 pt-8"
           >
-            {renderApp()}
+            <ErrorBoundary>
+              <Suspense fallback={
+                <div className="w-full h-full flex flex-col items-center justify-center">
+                  <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="mt-4 text-indigo-400 font-mono text-xs uppercase tracking-widest animate-pulse">Loading Module...</div>
+                </div>
+              }>
+                {renderApp()}
+              </Suspense>
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
       </main>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export const ASTRefactor = ({ currentPath }: { currentPath: string | null }) => {
+export const ASTRefactor = ({ currentPath: _currentPath }: { currentPath: string | null }) => {
   const [target, setTarget] = useState('OldClassName');
   const [replacement, setReplacement] = useState('NewClassName');
   const [logs, setLogs] = useState<string[]>([]);

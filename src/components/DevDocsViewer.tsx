@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 
 interface DocIndex {
-  name: String;
-  type: String;
-  path: String;
+  name: string;
+  type: string;
+  path: string;
 }
 
 export const DevDocsViewer = () => {
