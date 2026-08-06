@@ -5,6 +5,7 @@ import { LayoutDashboard, HardDrive, Network, GitBranch, TerminalSquare, Setting
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useStore } from './store/store';
+import { ToastContainer } from './components/ToastContainer';
 
 const FileGrid = lazy(() => import('./components/FileGrid').then(m => ({ default: m.FileGrid })));
 const DockerDashboard = lazy(() => import('./components/DockerDashboard').then(m => ({ default: m.DockerDashboard })));
@@ -190,7 +191,7 @@ function App() {
           </motion.div>
         </AnimatePresence>
       </main>
-
+      <ToastContainer />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { ShieldAlert } from 'lucide-react';
+import { useStore } from '../store/store';
 
 interface Props {
   children?: ReactNode;
@@ -23,6 +24,15 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+    try {
+      useStore.getState().addToast({
+        type: 'error',
+        title: 'Module Error',
+        message: error.message
+      });
+    } catch (e) {
+      // Ignore if store isn't ready
+    }
   }
 
   public render() {
