@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../store/store';
 
 interface EnvVarModalProps {
   isOpen: boolean;
@@ -19,11 +20,32 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
   const [isPathEditor, setIsPathEditor] = useState(false);
   const [pathList, setPathList] = useState<string[]>([]);
 
+  // Create state
+  const [isCreating, setIsCreating] = useState(false);
+  const [newKey, setNewKey] = useState('');
+  const [newVal, setNewVal] = useState('');
+
+  // Delete state
+  const [deleteKeyTarget, setDeleteKeyTarget] = useState<string | null>(null);
+
+  const { error: toastError, success: toastSuccess } = useToast();
+  const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+  const pathSep = isWindows ? ';' : ':';
+
   useEffect(() => {
     if (isOpen) {
       loadEnvVars();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const loadEnvVars = async () => {
     setLoading(true);
@@ -36,8 +58,9 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
       }, {} as Record<string, string>);
       
       setEnvVars(sorted);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to load env vars:", e);
+      toastError("Failed to load env vars", String(e));
     }
     setLoading(false);
   };
@@ -46,7 +69,7 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
     setEditingKey(key);
     if (key.toUpperCase() === 'PATH') {
       setIsPathEditor(true);
-      setPathList(value.split(';').filter(p => p.trim() !== ''));
+      setPathList(value.split(pathSep).filter(p => p.trim() !== ''));
     } else {
       setIsPathEditor(false);
       setEditValue(value);
@@ -56,36 +79,45 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
   const handleSave = async () => {
     if (!editingKey) return;
     
-    const finalValue = isPathEditor ? pathList.join(';') : editValue;
+    const finalValue = isPathEditor ? pathList.join(pathSep) : editValue;
     
     try {
       await invoke('set_env_var', { name: editingKey, value: finalValue });
+      toastSuccess('Variable Saved', editingKey);
       await loadEnvVars();
       setEditingKey(null);
-    } catch (e) {
-      alert("Failed to save: " + e);
+    } catch (e: any) {
+      toastError("Failed to save variable", String(e));
     }
   };
 
-  const handleDelete = async (key: string) => {
-    if (!confirm(`Are you sure you want to delete ${key}?`)) return;
+  const confirmDelete = async (key: string) => {
     try {
       await invoke('delete_env_var', { name: key });
+      toastSuccess('Variable Deleted', key);
       await loadEnvVars();
-    } catch (e) {
-      alert("Failed to delete: " + e);
+    } catch (e: any) {
+      toastError("Failed to delete variable", String(e));
+    } finally {
+      setDeleteKeyTarget(null);
     }
   };
 
-  const handleCreate = () => {
-    const key = prompt("Enter new variable name:");
-    if (!key) return;
-    const val = prompt("Enter value:");
-    if (val === null) return;
-    
-    invoke('set_env_var', { name: key, value: val })
-      .then(loadEnvVars)
-      .catch(e => alert(e));
+  const handleCreateSubmit = async () => {
+    if (!newKey.trim()) {
+      toastError("Validation Error", "Variable name cannot be empty");
+      return;
+    }
+    try {
+      await invoke('set_env_var', { name: newKey.trim(), value: newVal });
+      toastSuccess('Variable Created', newKey.trim());
+      setIsCreating(false);
+      setNewKey('');
+      setNewVal('');
+      await loadEnvVars();
+    } catch (e: any) {
+      toastError("Failed to create variable", String(e));
+    }
   };
 
   if (!isOpen) return null;
@@ -114,7 +146,7 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
             </div>
             <div className="flex items-center gap-4">
               <button 
-                onClick={handleCreate}
+                onClick={() => setIsCreating(true)}
                 className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 hover:bg-emerald-500/30 px-4 py-2 rounded-lg text-sm font-bold transition-colors"
               >
                 + New Variable
@@ -146,7 +178,7 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
                           Edit
                         </button>
                         <button 
-                          onClick={() => handleDelete(key)}
+                          onClick={() => setDeleteKeyTarget(key)}
                           className="px-3 py-1 bg-red-500/20 text-red-400 rounded hover:bg-red-500/40 text-sm font-bold"
                         >
                           Delete
@@ -159,7 +191,7 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
                       <div className="text-gray-400 font-mono text-sm break-all">
                         {key.toUpperCase() === 'PATH' ? (
                           <div className="flex flex-col gap-1 mt-2">
-                            {value.split(';').filter(p => p).map((p, i) => (
+                            {value.split(pathSep).filter(p => p).map((p, i) => (
                               <div key={i} className="bg-white/5 px-2 py-1 rounded truncate hover:bg-white/10">
                                 {p}
                               </div>
@@ -176,7 +208,7 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
                       <div className="mt-4 p-4 bg-black/50 border border-cyan/30 rounded-lg">
                         {isPathEditor ? (
                           <div className="flex flex-col gap-2">
-                            <p className="text-xs text-cyan mb-2">Smart Path Editor: No semicolons needed!</p>
+                            <p className="text-xs text-cyan mb-2">Smart Path Editor: No delimiters ({pathSep}) needed!</p>
                             {pathList.map((p, i) => (
                               <div key={i} className="flex gap-2">
                                 <input 
@@ -233,6 +265,77 @@ export const EnvVarModal = ({ isOpen, onClose }: EnvVarModalProps) => {
           </div>
         </motion.div>
       </motion.div>
+
+      {/* Create Variable Modal */}
+      {isCreating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0a0a0a] border border-white/10 rounded-xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-emerald-400">Create Environment Variable</h3>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs text-gray-400 font-bold block mb-1">Variable Name</label>
+                <input
+                  type="text"
+                  value={newKey}
+                  onChange={e => setNewKey(e.target.value)}
+                  placeholder="e.g. MY_API_KEY"
+                  className="w-full bg-black/50 border border-white/20 rounded px-3 py-2 text-white font-mono text-sm focus:border-emerald-400 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-bold block mb-1">Variable Value</label>
+                <input
+                  type="text"
+                  value={newVal}
+                  onChange={e => setNewVal(e.target.value)}
+                  placeholder="Value..."
+                  className="w-full bg-black/50 border border-white/20 rounded px-3 py-2 text-white font-mono text-sm focus:border-emerald-400 outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => setIsCreating(false)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateSubmit}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-sm transition-colors"
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Variable Confirm Modal */}
+      {deleteKeyTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0a0a0a] border border-white/10 rounded-xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-white">Delete Environment Variable</h3>
+            <p className="text-gray-300 text-sm">
+              Are you sure you want to delete <span className="font-mono text-emerald-300 font-bold">{deleteKeyTarget}</span>?
+            </p>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => setDeleteKeyTarget(null)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmDelete(deleteKeyTarget)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-sm transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AnimatePresence>
   );
 };

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { UnlistenFn } from '@tauri-apps/api/event';
+import { useToast } from '../store/store';
 
 interface LogViewerProps {
   logPath: string;
@@ -16,6 +17,7 @@ export const LogViewer = ({ logPath }: LogViewerProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isPausedRef = useRef(isPaused);
   const filterRef = useRef(filter);
+  const { error: toastError } = useToast();
   
   // Keep refs in sync for event listeners
   useEffect(() => {
@@ -34,8 +36,12 @@ export const LogViewer = ({ logPath }: LogViewerProps) => {
       // Clear lines on load
       setLines([`[Vaultly] Native Tail streaming started for: ${logPath}`]);
 
-      // Start tailing backend
-      await invoke('start_tail_log', { path: logPath });
+      try {
+        // Start tailing backend
+        await invoke('start_tail_log', { path: logPath });
+      } catch (e: any) {
+        toastError('Log Tail Error', String(e));
+      }
 
       // Listen for lines
       unlistenLine = await listen<string>('log-line', (event) => {
@@ -48,7 +54,7 @@ export const LogViewer = ({ logPath }: LogViewerProps) => {
           try {
             const regex = new RegExp(filterRef.current, 'i');
             if (!regex.test(line)) return;
-          } catch (e) {
+          } catch (_) {
             // invalid regex, fallback to includes
             if (!line.toLowerCase().includes(filterRef.current.toLowerCase())) return;
           }
@@ -75,7 +81,9 @@ export const LogViewer = ({ logPath }: LogViewerProps) => {
     return () => {
       if (unlistenLine) unlistenLine();
       if (unlistenError) unlistenError();
-      invoke('stop_tail_log').catch(console.error);
+      invoke('stop_tail_log').catch(e => {
+        toastError('Stop Log Tail Error', String(e));
+      });
     };
   }, [logPath]);
 

@@ -33,7 +33,12 @@ pub fn start_multiplex_pty(
         pixel_height: 0,
     }).map_err(|e| e.to_string())?;
 
-    let cmd_str = command.unwrap_or_else(|| "powershell.exe".to_string());
+    let default_shell = if cfg!(target_os = "windows") {
+        "powershell.exe".to_string()
+    } else {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+    };
+    let cmd_str = command.unwrap_or(default_shell);
     let cmd = CommandBuilder::new(cmd_str);
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 

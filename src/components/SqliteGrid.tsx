@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface SqliteResult {
@@ -16,23 +16,23 @@ export const SqliteGrid = ({ dbPath }: SqliteGridProps) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const executeQuery = async () => {
+  const executeQuery = useCallback(async (q: string = query) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await invoke<SqliteResult>('query_sqlite', { path: dbPath, query });
-      setResult(res);
-    } catch (e) {
-      setError(String(e));
+      const result = await invoke<SqliteResult>('query_sqlite', { path: dbPath, query: q });
+      setResult(result);
+    } catch (e: any) {
+      setError(e.toString());
       setResult(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [dbPath, query]);
 
   useEffect(() => {
     executeQuery();
-  }, [dbPath]); // Auto run default query on open
+  }, [executeQuery]); // Auto run default query on open
 
   return (
     <div className="h-full flex flex-col bg-black/40 text-gray-200">
@@ -51,7 +51,7 @@ export const SqliteGrid = ({ dbPath }: SqliteGridProps) => {
             placeholder="SELECT * FROM users LIMIT 50;"
           />
           <button 
-            onClick={executeQuery}
+            onClick={() => executeQuery()}
             className="px-6 py-2 bg-cyan/20 hover:bg-cyan/30 text-cyan rounded border border-cyan/30 transition-colors font-bold text-sm"
           >
             {loading ? 'Running...' : 'Run'}

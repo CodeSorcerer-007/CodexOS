@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 interface VaultModalProps {
   isOpen: boolean;
@@ -14,25 +15,32 @@ export const VaultModal = ({ isOpen, onClose, targetPath }: VaultModalProps) => 
   const [confirmPassword, setConfirmPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const { error: toastError, success: toastSuccess } = useToast();
+
+  useEffect(() => {
+    if (isOpen && targetPath) {
+      if (targetPath.endsWith('.vaultly')) {
+        setMode('decrypt');
+      } else {
+        setMode('encrypt');
+      }
+    }
+  }, [isOpen, targetPath]);
 
   if (!targetPath) return null;
-
-  const isVaultFile = targetPath.endsWith('.vaultly');
-
-  // Auto-switch mode based on file type
-  if (isOpen && mode === 'encrypt' && isVaultFile) setMode('decrypt');
-  if (isOpen && mode === 'decrypt' && !isVaultFile) setMode('encrypt');
 
   const handleAction = async () => {
     if (mode === 'encrypt' && password !== confirmPassword) {
       setErrorMsg("Passwords don't match");
       setStatus('error');
+      toastError('Vault Action Failed', "Passwords don't match");
       return;
     }
     
     if (password.length < 4) {
       setErrorMsg("Password too short");
       setStatus('error');
+      toastError('Vault Action Failed', "Password too short");
       return;
     }
 
@@ -46,6 +54,7 @@ export const VaultModal = ({ isOpen, onClose, targetPath }: VaultModalProps) => 
         await invoke('decrypt_vault', { path: targetPath, password, outPath });
       }
       setStatus('success');
+      toastSuccess('Vault Operation', mode === 'encrypt' ? 'Vault Sealed Successfully!' : 'Vault Unlocked Successfully!');
       setTimeout(() => {
         onClose();
         setStatus('idle');
@@ -55,6 +64,7 @@ export const VaultModal = ({ isOpen, onClose, targetPath }: VaultModalProps) => 
     } catch (e: any) {
       setStatus('error');
       setErrorMsg(e.toString());
+      toastError('Vault Operation Failed', e.toString());
     }
   };
 

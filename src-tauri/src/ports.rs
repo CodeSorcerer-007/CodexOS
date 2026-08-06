@@ -21,38 +21,65 @@ pub fn get_active_ports() -> Result<Vec<PortInfo>, String> {
     
     let mut sys = System::new();
     sys.refresh_all();
-    
-    let output = Command::new("netstat")
-        .args(["-ano", "-p", "tcp"])
-        .output()
-        .map_err(|e| e.to_string())?;
-        
     let mut ports = Vec::new();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    for line in stdout.lines().skip(4) {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 4 {
-            let local_addr = parts[1];
-            let state = parts[3];
-            let pid_str = if parts.len() > 4 { parts[4] } else { parts[3] };
+
+    if cfg!(target_os = "windows") {
+        let output = Command::new("netstat")
+            .args(["-ano", "-p", "tcp"])
+            .output()
+            .map_err(|e| e.to_string())?;
             
-            if state == "LISTENING" {
-                let port = local_addr.split(':').next_back().unwrap_or("").to_string();
-                let pid = pid_str.to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        for line in stdout.lines().skip(4) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                let local_addr = parts[1];
+                let state = parts[3];
+                let pid_str = if parts.len() > 4 { parts[4] } else { parts[3] };
                 
-                let process_name = if let Ok(pid_num) = pid.parse::<usize>() {
-                    sys.process(sysinfo::Pid::from(pid_num)).map(|p| p.name().to_string()).unwrap_or_else(|| "Unknown".to_string())
-                } else {
-                    "Unknown".to_string()
-                };
-                
-                if !ports.iter().any(|p: &PortInfo| p.port == port && p.pid == pid) {
+                if state == "LISTENING" {
+                    let port = local_addr.split(':').next_back().unwrap_or("").to_string();
+                    let pid = pid_str.to_string();
+                    
+                    let process_name = if let Ok(pid_num) = pid.parse::<usize>() {
+                        sys.process(sysinfo::Pid::from(pid_num)).map(|p| p.name().to_string()).unwrap_or_else(|| "Unknown".to_string())
+                    } else {
+                        "Unknown".to_string()
+                    };
+                    
+                    if !ports.iter().any(|p: &PortInfo| p.port == port && p.pid == pid) {
+                        ports.push(PortInfo {
+                            port,
+                            pid,
+                            process_name,
+                            state: state.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    } else {
+        let output = Command::new("lsof")
+            .args(["-iTCP", "-sTCP:LISTEN", "-P", "-n"])
+            .output()
+            .map_err(|e| format!("Failed to run lsof: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines().skip(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 9 {
+                let process_name = parts[0].to_string();
+                let pid = parts[1].to_string();
+                let name_field = parts[8];
+                let port = name_field.split(':').next_back().unwrap_or("").to_string();
+
+                if !port.is_empty() && !ports.iter().any(|p: &PortInfo| p.port == port && p.pid == pid) {
                     ports.push(PortInfo {
                         port,
                         pid,
                         process_name,
-                        state: state.to_string(),
+                        state: "LISTEN".to_string(),
                     });
                 }
             }
@@ -66,10 +93,15 @@ pub fn get_active_ports() -> Result<Vec<PortInfo>, String> {
 pub fn kill_process(pid: String) -> Result<String, String> {
     use std::process::Command;
     
-    let output = Command::new("taskkill")
-        .args(["/F", "/PID", &pid])
-        .output()
-        .map_err(|e| e.to_string())?;
+    let output = if cfg!(target_os = "windows") {
+        Command::new("taskkill")
+            .args(["/F", "/PID", &pid])
+            .output()
+    } else {
+        Command::new("kill")
+            .args(["-9", &pid])
+            .output()
+    }.map_err(|e| e.to_string())?;
         
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -88,9 +120,10 @@ pub fn spawn_local_server(path: String) -> Result<String, String> {
     let port = 8080;
     
     let server_addr = format!("0.0.0.0:{}", port);
+    let server = Server::http(&server_addr)
+        .map_err(|e| format!("Failed to bind local server to {}: {}", server_addr, e))?;
     
     thread::spawn(move || {
-        let server = Server::http(&server_addr).unwrap();
         for request in server.incoming_requests() {
             let mut req_path = request.url().to_string();
             if req_path == "/" {

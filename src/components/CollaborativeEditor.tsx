@@ -32,6 +32,8 @@ export const CollaborativeEditor = ({ currentPath }: { currentPath: string | nul
             json: 'json', yaml: 'yaml', yml: 'yaml', css: 'css', html: 'html',
           };
           setLanguage(langMap[ext] || 'plaintext');
+          // Join room AFTER content is loaded to avoid race condition
+          joinRoom(roomId);
         })
         .catch(e => toastError('Failed to load file', String(e)));
     }
@@ -102,7 +104,11 @@ export const CollaborativeEditor = ({ currentPath }: { currentPath: string | nul
   };
 
   const saveFile = async () => {
-    if (!currentPath || !editorRef.current) return;
+    if (!currentPath) {
+      toastError('Save Failed', 'No file path set. Open a file from the File Manager first.');
+      return;
+    }
+    if (!editorRef.current) return;
     try {
       const content = editorRef.current.getValue();
       await invoke('write_file_text', { path: currentPath, content });
@@ -113,7 +119,10 @@ export const CollaborativeEditor = ({ currentPath }: { currentPath: string | nul
   };
 
   useEffect(() => {
-    joinRoom(roomId);
+    // Only auto-join if no currentPath (blank editor session)
+    if (!currentPath) {
+      joinRoom(roomId);
+    }
     return () => {
       bindingRef.current?.destroy();
       providerRef.current?.destroy();

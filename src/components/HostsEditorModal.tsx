@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../store/store';
 
 interface HostsEditorModalProps {
   isOpen: boolean;
@@ -11,6 +12,10 @@ export const HostsEditorModal = ({ isOpen, onClose }: HostsEditorModalProps) => 
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { success: toastSuccess, error: toastError } = useToast();
+
+  const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+  const hostsPath = isWindows ? 'C:\\Windows\\System32\\drivers\\etc\\hosts' : '/etc/hosts';
 
   useEffect(() => {
     if (isOpen) {
@@ -18,13 +23,22 @@ export const HostsEditorModal = ({ isOpen, onClose }: HostsEditorModalProps) => 
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const loadHosts = async () => {
     setLoading(true);
     try {
       const data = await invoke<string>('read_hosts');
       setContent(data);
-    } catch (e) {
-      alert(`Failed to read hosts file: ${e}`);
+    } catch (e: any) {
+      toastError('Failed to read hosts file', String(e));
     }
     setLoading(false);
   };
@@ -33,9 +47,10 @@ export const HostsEditorModal = ({ isOpen, onClose }: HostsEditorModalProps) => 
     setSaving(true);
     try {
       await invoke('write_hosts', { content });
+      toastSuccess('Hosts Saved', 'System hosts file updated successfully');
       onClose();
-    } catch (e) {
-      alert(`Failed to save hosts file: ${e}`);
+    } catch (e: any) {
+      toastError('Failed to save hosts file', String(e));
     }
     setSaving(false);
   };
@@ -61,7 +76,7 @@ export const HostsEditorModal = ({ isOpen, onClose }: HostsEditorModalProps) => 
               <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
                 System Hosts Editor
               </h2>
-              <p className="text-gray-400 text-sm mt-1">C:\Windows\System32\drivers\etc\hosts</p>
+              <p className="text-gray-400 text-sm mt-1">{hostsPath}</p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
           </div>

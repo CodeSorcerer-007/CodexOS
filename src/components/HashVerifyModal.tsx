@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../store/store';
 
 interface HashVerifyModalProps {
   isOpen: boolean;
@@ -14,6 +15,16 @@ export const HashVerifyModal = ({ isOpen, onClose, filePath }: HashVerifyModalPr
   const [expectedHash, setExpectedHash] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { error: toastError } = useToast();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (isOpen && filePath) {
@@ -32,8 +43,9 @@ export const HashVerifyModal = ({ isOpen, onClose, filePath }: HashVerifyModalPr
     try {
       const result = await invoke<string>('calculate_hash', { path: filePath, algorithm });
       setHash(result);
-    } catch (e) {
+    } catch (e: any) {
       setError(String(e));
+      toastError('Hash Calculation Failed', String(e));
     }
     setLoading(false);
   };

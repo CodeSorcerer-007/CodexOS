@@ -15,21 +15,25 @@ pub async fn query_docset(docset_path: String, query: String) -> Result<Vec<DocI
         return Err("Not a valid docset".to_string());
     }
     
-    let url = format!("sqlite://{}", db_path.display());
-    
-    let pool = sqlx::any::AnyPoolOptions::new()
-        .connect(&url).await.map_err(|e| format!("Connection error: {}", e))?;
-    
-    // Dash schema usually has a searchIndex table: id, name, type, path
-    // We search by name using LIKE
-    let sql = format!("SELECT name, type, path FROM searchIndex WHERE name LIKE '%{}%' LIMIT 100", query.replace("'", "''"));
-    let rows = sqlx::query(&sql).fetch_all(&pool).await.map_err(|e| format!("Query error: {}", e))?;
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| format!("Database connection error: {}", e))?;
+        
+    let mut stmt = conn.prepare("SELECT name, type, path FROM searchIndex WHERE name LIKE ?1 LIMIT 100")
+        .map_err(|e| format!("Query prepare error: {}", e))?;
+        
+    let pattern = format!("%{}%", query);
+    let rows = stmt.query_map(rusqlite::params![pattern], |row| {
+        Ok(DocIndex {
+            name: row.get(0)?,
+            r#type: row.get(1)?,
+            path: row.get(2)?,
+        })
+    }).map_err(|e| format!("Query execution error: {}", e))?;
     
     let mut results = Vec::new();
     for row in rows {
-        use sqlx::Row;
-        if let (Ok(name), Ok(r#type), Ok(path)) = (row.try_get::<String, _>("name"), row.try_get::<String, _>("type"), row.try_get::<String, _>("path")) {
-            results.push(DocIndex { name, r#type, path });
+        if let Ok(doc) = row {
+            results.push(doc);
         }
     }
     

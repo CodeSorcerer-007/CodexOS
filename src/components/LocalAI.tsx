@@ -1,18 +1,22 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { Bot, Send, User, Zap, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
-  sources?: string[];
 }
 
-export const LocalAI = ({ currentPath }: { currentPath: string | null }) => {
+export const LocalAI = () => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I am your deterministic local code assistant. Ask me to find logic or keywords in your codebase.' }
+    { role: 'assistant', content: 'Hello! I am connected to your local Ollama instance. How can I help you today?' }
   ]);
   const [input, setInput] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [model, setModel] = useState('llama3.2:latest');
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -21,108 +25,143 @@ export const LocalAI = ({ currentPath }: { currentPath: string | null }) => {
     }
   }, [messages]);
 
-  const extractKeywords = (query: string) => {
-    // Very simple stopword removal for deterministic keyword extraction
-    const stopwords = ['where', 'is', 'the', 'how', 'do', 'i', 'find', 'auth', 'logic', 'what', 'does', 'in', 'of', 'and', 'to', 'a'];
-    return query.toLowerCase()
-      .replace(/[^\w\s]/gi, '')
-      .split(' ')
-      .filter(w => w.length > 2 && !stopwords.includes(w));
-  };
-
-  const handleSend = async () => {
-    if (!input.trim() || !currentPath) return;
-
-    const userMsg = input.trim();
-    setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
-    setIsSearching(true);
-
-    const keywords = extractKeywords(userMsg);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
     
-    if (keywords.length === 0) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "I couldn't identify specific keywords to search for. Try asking for specific variable names or concepts." }]);
-      setIsSearching(false);
-      return;
-    }
+    const setupListener = async () => {
+      const u = await listen<string>('ai-token', (event) => {
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last.role === 'assistant') {
+            return [
+              ...prev.slice(0, -1),
+              { role: 'assistant', content: last.content + event.payload }
+            ];
+          } else {
+            return [...prev, { role: 'assistant', content: event.payload }];
+          }
+        });
+      });
+      unlisten = u;
+    };
+    
+    setupListener();
+    return () => { if (unlisten) unlisten(); };
+  }, []);
 
+  const sendMessage = async () => {
+    if (!input.trim() || isGenerating) return;
+    
+    const userMsg = input;
+    setInput('');
+    setError(null);
+    setMessages(prev => [...prev, { role: 'user', content: userMsg }, { role: 'assistant', content: '' }]);
+    setIsGenerating(true);
+    
     try {
-      // We use the existing Rust backend 'search_contents' command
-      // We'll search for the first keyword as a primary anchor
-      const anchor = keywords[0];
-      const results = await invoke<string[]>('search_contents', { path: currentPath, query: anchor });
-      
-      if (results.length === 0) {
-        setMessages(prev => [...prev, { role: 'assistant', content: `I couldn't find any files mentioning "${anchor}".` }]);
-      } else {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: `I found ${results.length} files matching your query for "${anchor}". Here are the most relevant ones based on deterministic search:`,
-          sources: results.slice(0, 5) // top 5
-        }]);
-      }
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `Error searching codebase: ${e}` }]);
+      await invoke('query_ollama', { model, prompt: userMsg });
+    } catch (e: any) {
+      setError(String(e));
+      setMessages(prev => prev.slice(0, -1)); // Remove the empty assistant message
     } finally {
-      setIsSearching(false);
+      setIsGenerating(false);
     }
   };
 
   return (
-    <div className="flex h-full w-full bg-[#0a0f18] text-white flex-col max-w-4xl mx-auto border-x border-white/10 shadow-2xl">
-      <div className="p-4 border-b border-white/10 bg-black/40 flex justify-between items-center">
-        <div>
-          <h2 className="font-bold text-blue-400">Local Code Assistant</h2>
-          <p className="text-xs text-gray-500">Deterministic Keyword Engine (0MB RAM)</p>
+    <div className="flex flex-col h-full w-full bg-[#0a0f18] text-white">
+      {/* Header */}
+      <div className="flex justify-between items-center px-6 py-4 border-b border-white/10 bg-black/40">
+        <div className="flex items-center gap-3">
+          <Zap className="text-yellow-400" size={24} />
+          <h2 className="font-bold text-xl text-yellow-400">Local AI Assistant</h2>
+          <span className="bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded text-xs font-bold ml-2">
+            Ollama Backend
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Model</span>
+          <select 
+            value={model}
+            onChange={e => setModel(e.target.value)}
+            className="bg-black/50 border border-white/10 rounded px-3 py-1.5 text-sm outline-none focus:border-yellow-500"
+          >
+            <option value="llama3.2:latest">Llama 3.2</option>
+            <option value="codellama">CodeLlama</option>
+            <option value="mistral">Mistral</option>
+          </select>
         </div>
       </div>
-      
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6" ref={scrollRef}>
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-            <div className={`max-w-[80%] rounded-2xl p-4 ${msg.role === 'user' ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white/10 border border-white/5 text-gray-200 rounded-bl-none'}`}>
-              <div className="text-sm">{msg.content}</div>
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/10 flex flex-col gap-2">
-                  <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Sources</div>
-                  {msg.sources.map(s => (
-                    <div key={s} className="text-xs font-mono text-blue-300 bg-black/40 p-2 rounded truncate border border-blue-500/20">
-                      {s.replace(currentPath || '', '')}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-        {isSearching && (
-          <div className="flex items-start">
-            <div className="bg-white/5 border border-white/5 rounded-2xl rounded-bl-none p-4 flex gap-2 items-center">
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-75" />
-              <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce delay-150" />
+
+      {/* Chat Area */}
+      <div 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-6 space-y-6"
+      >
+        <AnimatePresence>
+          {messages.map((msg, i) => (
+            <motion.div 
+              key={i}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`flex gap-4 max-w-4xl mx-auto ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+            >
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border
+                ${msg.role === 'user' ? 'bg-indigo-600 border-indigo-400/50 text-white' : 'bg-black border-yellow-500/50 text-yellow-500'}`}
+              >
+                {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+              </div>
+              <div className={`px-5 py-3 rounded-2xl whitespace-pre-wrap font-mono text-sm shadow-lg
+                ${msg.role === 'user' ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-100' : 'bg-black/50 border border-white/10 text-gray-300'}`}
+              >
+                {msg.content}
+                {isGenerating && i === messages.length - 1 && msg.role === 'assistant' && (
+                  <span className="inline-block w-2 h-4 ml-1 bg-yellow-500 animate-pulse align-middle" />
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        
+        {error && (
+          <div className="max-w-4xl mx-auto bg-red-500/20 border border-red-500/50 text-red-200 p-4 rounded-lg flex items-start gap-3">
+            <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-400" />
+            <div className="font-mono text-sm">
+              <strong className="block mb-1">Connection Error</strong>
+              {error}
+              <p className="mt-2 text-xs text-red-300">Make sure Ollama is installed and running locally on port 11434.</p>
             </div>
           </div>
         )}
       </div>
 
-      <div className="p-4 bg-black/40 border-t border-white/10">
-        <div className="flex gap-2">
-          <input 
-            type="text"
+      {/* Input Area */}
+      <div className="p-6 border-t border-white/10 bg-black/40">
+        <div className="max-w-4xl mx-auto relative">
+          <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
-            placeholder="E.g., Where is the vault encryption logic?"
-            className="flex-1 bg-black/60 border border-white/10 focus:border-blue-500 rounded-xl px-4 py-3 text-sm outline-none transition-colors"
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
+            placeholder="Ask anything or paste code..."
+            className="w-full bg-black/50 border border-white/20 rounded-xl pl-4 pr-14 py-4 text-sm font-mono text-white outline-none focus:border-yellow-500 resize-none"
+            rows={3}
           />
           <button 
-            onClick={handleSend}
-            disabled={!input.trim() || isSearching || !currentPath}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl font-bold transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)]"
+            disabled={isGenerating || !input.trim()}
+            onClick={sendMessage}
+            className="absolute bottom-4 right-4 p-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-30 disabled:hover:bg-yellow-500"
           >
-            Send
+            <Send size={18} />
           </button>
+        </div>
+        <div className="max-w-4xl mx-auto mt-2 text-center text-xs text-gray-600 font-bold uppercase tracking-widest">
+          Press Shift+Enter for new line
         </div>
       </div>
     </div>

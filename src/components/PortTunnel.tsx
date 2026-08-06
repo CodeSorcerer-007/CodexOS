@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { QRCodeSVG } from 'qrcode.react';
@@ -17,27 +17,29 @@ export const PortTunnel = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const toast = useToast();
 
-  const fetchTunnels = async () => {
+  const fetchTunnels = useCallback(async () => {
     try {
       const t = await invoke<TunnelInfo[]>('list_tunnels');
       setTunnels(t);
     } catch (e: any) {
       toast.error('Failed to fetch tunnels', String(e));
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchTunnels();
     const interval = setInterval(fetchTunnels, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchTunnels]);
 
   useEffect(() => {
     const unlisten = listen<string>('tunnel-log', (event) => {
       setLogs((prev) => [...prev, event.payload].slice(-50)); // keep last 50
     });
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(e => {
+        toast.error('Tunnel Log Error', String(e));
+      });
     };
   }, []);
 

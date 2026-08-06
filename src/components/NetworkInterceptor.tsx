@@ -49,7 +49,7 @@ export const NetworkInterceptor = () => {
     
     return () => {
       if (unlisten) unlisten();
-      invoke('stop_proxy').catch(console.error);
+      invoke('stop_proxy').catch(e => console.warn('Stop Proxy Error on unmount:', e));
     };
   }, []);
 

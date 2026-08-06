@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Treemap, ResponsiveContainer, Tooltip } from 'recharts';
+import { useToast } from '../store/store';
 
 interface TreeMapOverlayProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ const formatBytes = (bytes: number) => {
 
 const CustomizedContent = (props: any) => {
   const { root, depth, x, y, width, height, index, name, size } = props;
+  const childrenLen = root?.children?.length || 1;
 
   return (
     <g>
@@ -37,7 +39,7 @@ const CustomizedContent = (props: any) => {
         width={width}
         height={height}
         style={{
-          fill: depth < 2 ? COLORS[Math.floor(index / root.children.length * 6)] : '#ffffff11',
+          fill: depth < 2 ? COLORS[Math.floor((index / childrenLen) * 6) % COLORS.length] : '#ffffff11',
           stroke: '#fff',
           strokeWidth: 2 / (depth + 1e-10),
           strokeOpacity: 1 / (depth + 1e-10),
@@ -62,6 +64,16 @@ export const TreeMapOverlay = ({ isOpen, onClose, currentPath }: TreeMapOverlayP
   const [data, setData] = useState<TreeMapNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { error: toastError } = useToast();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (isOpen && currentPath) {
@@ -77,6 +89,7 @@ export const TreeMapOverlay = ({ isOpen, onClose, currentPath }: TreeMapOverlayP
       setData(result);
     } catch (e: any) {
       setError(e.toString());
+      toastError('TreeMap Scan Failed', String(e));
     }
     setLoading(false);
   };

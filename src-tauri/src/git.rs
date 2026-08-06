@@ -289,11 +289,18 @@ pub fn git_clone(url: String, destination: String, app_handle: tauri::AppHandle)
     use tauri::Emitter;
     std::thread::spawn(move || {
         use std::io::{BufRead, BufReader};
-        let mut child = Command::new("git")
+        let child_res = Command::new("git")
             .args(["clone", "--progress", &url, &destination])
             .stderr(std::process::Stdio::piped())
-            .spawn()
-            .expect("failed to execute child");
+            .spawn();
+            
+        let mut child = match child_res {
+            Ok(child) => child,
+            Err(e) => {
+                let _ = app_handle.emit("git-progress", format!("Error: Failed to execute git: {}", e));
+                return;
+            }
+        };
         
         if let Some(stderr) = child.stderr.take() {
             let reader = BufReader::new(stderr);

@@ -6,6 +6,8 @@ import 'xterm/css/xterm.css';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
+import { useStore } from '../store/store';
+
 const springPhysics = {
   type: "spring" as const,
   stiffness: 300,
@@ -42,17 +44,27 @@ export const TerminalDrawer = ({ isOpen, onClose }: { isOpen: boolean, onClose: 
       termInstance.current = term;
 
       const setupPty = async () => {
-        // Start the PTY backend process
-        await invoke('start_pty');
+        try {
+          // Start the PTY backend process
+          await invoke('start_pty');
+        } catch (e: any) {
+          useStore.getState().addToast({ type: 'error', title: 'PTY Connection Failed', message: String(e) });
+        }
         
-        // Listen for output from Rust
-        unlisten = await listen<string>('pty-output', (event) => {
-          term.write(event.payload);
-        });
+        try {
+          // Listen for output from Rust
+          unlisten = await listen<string>('pty-output', (event) => {
+            term.write(event.payload);
+          });
+        } catch (e: any) {
+          console.error("PTY listen error:", e);
+        }
 
         // Send keystrokes to Rust
         term.onData((data) => {
-          invoke('write_pty', { data });
+          invoke('write_pty', { data }).catch(e => {
+            console.error("PTY write error:", e);
+          });
         });
       };
 

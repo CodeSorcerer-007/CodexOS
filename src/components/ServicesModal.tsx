@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../store/store';
 
 interface WindowsService {
   name: string;
@@ -19,6 +20,8 @@ export const ServicesModal = ({ isOpen, onClose }: ServicesModalProps) => {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmServiceTarget, setConfirmServiceTarget] = useState<{ name: string; action: 'Start' | 'Stop' | 'Restart' } | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
 
   useEffect(() => {
     if (isOpen) {
@@ -26,13 +29,23 @@ export const ServicesModal = ({ isOpen, onClose }: ServicesModalProps) => {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const loadServices = async () => {
     setLoading(true);
     try {
       const result = await invoke<WindowsService[]>('get_services');
       setServices(result);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to load services:", e);
+      toastError("Failed to load services", String(e));
     }
     setLoading(false);
   };
@@ -50,17 +63,22 @@ export const ServicesModal = ({ isOpen, onClose }: ServicesModalProps) => {
     });
   }, [services, searchQuery]);
 
-  const handleAction = async (name: string, action: 'Start' | 'Stop' | 'Restart') => {
-    if (!confirm(`Are you sure you want to ${action.toLowerCase()} the service '${name}'?`)) return;
-    
+  const handleAction = (name: string, action: 'Start' | 'Stop' | 'Restart') => {
+    setConfirmServiceTarget({ name, action });
+  };
+
+  const confirmServiceAction = async (name: string, action: 'Start' | 'Stop' | 'Restart') => {
     setActionLoading(name);
     try {
       await invoke('manage_service', { name, action });
+      toastSuccess('Service Updated', `Successfully executed ${action} on '${name}'`);
       await loadServices(); // Refresh list to get new status
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Service Action Failed', String(e));
+    } finally {
+      setActionLoading(null);
+      setConfirmServiceTarget(null);
     }
-    setActionLoading(null);
   };
 
   if (!isOpen) return null;
@@ -184,6 +202,31 @@ export const ServicesModal = ({ isOpen, onClose }: ServicesModalProps) => {
           </div>
         </motion.div>
       </motion.div>
+
+      {confirmServiceTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#0a0a0a] border border-white/10 rounded-xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-white">Confirm Service Action</h3>
+            <p className="text-gray-300 text-sm">
+              Are you sure you want to {confirmServiceTarget.action.toLowerCase()} the service <span className="font-mono text-purple-300 font-bold">{confirmServiceTarget.name}</span>?
+            </p>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => setConfirmServiceTarget(null)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmServiceAction(confirmServiceTarget.name, confirmServiceTarget.action)}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-sm transition-colors"
+              >
+                Confirm {confirmServiceTarget.action}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AnimatePresence>
   );
 };

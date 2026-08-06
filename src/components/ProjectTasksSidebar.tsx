@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play } from 'lucide-react';
@@ -13,11 +13,7 @@ export const ProjectTasksSidebar = ({ currentPath, onExecuteTask }: ProjectTasks
   const [loading, setLoading] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
-  useEffect(() => {
-    loadTasks();
-  }, [currentPath]);
-
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
       const result = await invoke<Record<string, string>>('get_project_tasks', { path: currentPath });
@@ -28,7 +24,11 @@ export const ProjectTasksSidebar = ({ currentPath, onExecuteTask }: ProjectTasks
       setIsVisible(false);
     }
     setLoading(false);
-  };
+  }, [currentPath]);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   if (!isVisible && !loading) return null;
 

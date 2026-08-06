@@ -15,6 +15,7 @@ mod zkp;
 mod secrets;
 mod tunnel;
 mod sys;
+mod ai;
 
 pub mod files;
 pub mod git;
@@ -44,7 +45,12 @@ fn start_pty(app_handle: tauri::AppHandle, state: State<'_, PtyState>) -> Result
         pixel_height: 0,
     }).map_err(|e| e.to_string())?;
 
-    let cmd = CommandBuilder::new("powershell.exe");
+    let default_shell = if cfg!(target_os = "windows") {
+        "powershell.exe"
+    } else {
+        "/bin/bash"
+    };
+    let cmd = CommandBuilder::new(default_shell);
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
@@ -74,11 +80,37 @@ fn write_pty(data: String, state: State<'_, PtyState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn detect_tool(tool: String) -> String {
+    // Returns version string or empty string if not found
+    let args = match tool.as_str() {
+        "git" => vec!["--version"],
+        "docker" => vec!["--version"],
+        "rg" => vec!["--version"],
+        "node" => vec!["--version"],
+        _ => return String::new(),
+    };
+    
+    std::process::Command::new(&tool)
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn get_os_info() -> String {
+    std::env::consts::OS.to_string()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let sys = System::new();
     
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(PtyState {
             writer: Arc::new(Mutex::new(None)),
             child: Arc::new(Mutex::new(None)),
@@ -96,6 +128,9 @@ pub fn run() {
             files::get_drives,
             files::read_file_text,
             files::write_file_text,
+            files::create_file,
+            files::create_directory,
+            files::rename_path,
             files::read_file_binary,
             files::write_file_binary_webrtc,
             vault::encrypt_vault,
@@ -115,6 +150,7 @@ pub fn run() {
             start_pty,
             write_pty,
             sys::get_sys_stats,
+            sys::get_top_processes_memory,
             sys::get_gpu_info,
             sys::get_gpu_utilization,
             files::scan_dev_bloat,
@@ -124,6 +160,7 @@ pub fn run() {
             secrets::list_secret_keys,
             secrets::remove_secret,
             secrets::run_with_secrets,
+            secrets::export_secrets_to_env,
             tunnel::start_tunnel,
             tunnel::stop_tunnel,
             tunnel::list_tunnels,
@@ -153,6 +190,8 @@ pub fn run() {
             docker::docker_remove_image,
             docker::get_container_stats,
             docker::docker_inspect,
+            detect_tool,
+            get_os_info,
             files::get_code_metrics,
             ports::get_active_ports,
             ports::kill_process,
@@ -184,7 +223,8 @@ pub fn run() {
             system_tools::install_font,
             ports::execute_http_request,
             crypto_tools::inspect_ssl_cert,
-            files::delete_file
+            files::delete_file,
+            ai::query_ollama
         ])
         .setup(|app| {
             use tauri::Manager;

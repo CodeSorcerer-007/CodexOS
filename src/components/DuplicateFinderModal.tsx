@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '../store/store';
 
 interface DuplicateGroup {
   hash: string;
@@ -18,37 +19,51 @@ export const DuplicateFinderModal = ({ isOpen, onClose, targetPath }: DuplicateF
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  useEffect(() => {
-    if (isOpen) {
-      scanForDuplicates();
-    }
-  }, [isOpen, targetPath]);
+  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
+  const { error: toastError, success: toastSuccess } = useToast();
 
-  const scanForDuplicates = async () => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+  
+  const scanForDuplicates = useCallback(async () => {
     if (!targetPath) return;
     setLoading(true);
     setError(null);
     try {
       const result = await invoke<DuplicateGroup[]>('find_duplicates', { path: targetPath });
       setDuplicates(result);
-    } catch (e) {
+    } catch (e: any) {
       setError(String(e));
+      toastError('Duplicate Scan Failed', String(e));
     }
     setLoading(false);
-  };
+  }, [targetPath, toastError]);
 
-  const handleDelete = async (file: string) => {
-    if (!confirm(`Are you sure you want to permanently delete:\n${file}`)) return;
+  useEffect(() => {
+    if (isOpen) {
+      scanForDuplicates();
+    }
+  }, [isOpen, scanForDuplicates]);
+
+  const confirmDelete = async (file: string) => {
     try {
       await invoke('delete_file', { path: file });
+      toastSuccess('File Deleted', file);
       // Remove from UI manually to avoid full re-scan
       setDuplicates(prev => prev.map(group => ({
         ...group,
         files: group.files.filter(f => f !== file)
       })).filter(group => group.files.length > 1));
-    } catch (e) {
-      alert(`Failed to delete: ${e}`);
+    } catch (e: any) {
+      toastError('Delete Failed', String(e));
+    } finally {
+      setFileToDelete(null);
     }
   };
 
@@ -117,7 +132,7 @@ export const DuplicateFinderModal = ({ isOpen, onClose, targetPath }: DuplicateF
                       <div key={fidx} className="flex justify-between items-center p-2 hover:bg-white/5 rounded-lg group transition-colors">
                         <span className="text-gray-400 text-sm font-mono truncate mr-4" title={file}>{file}</span>
                         <button 
-                          onClick={() => handleDelete(file)}
+                          onClick={() => setFileToDelete(file)}
                           className="px-3 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/40 opacity-0 group-hover:opacity-100 transition-opacity text-xs font-bold whitespace-nowrap"
                         >
                           Delete
@@ -131,6 +146,34 @@ export const DuplicateFinderModal = ({ isOpen, onClose, targetPath }: DuplicateF
           </div>
         </motion.div>
       </motion.div>
+
+      {fileToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-panel border border-white/10 rounded-xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-white">Confirm Permanent Deletion</h3>
+            <p className="text-gray-300 text-sm">
+              Are you sure you want to permanently delete:
+            </p>
+            <p className="text-xs font-mono text-red-400 bg-black/50 p-2 rounded break-all border border-red-500/20">
+              {fileToDelete}
+            </p>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => setFileToDelete(null)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmDelete(fileToDelete)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-sm transition-colors"
+              >
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AnimatePresence>
   );
 };

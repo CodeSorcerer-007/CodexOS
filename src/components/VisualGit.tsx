@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { useToast } from '../store/store';
 
 interface GitStatus {
   staged: string[];
@@ -47,6 +48,7 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
   const [cloneProgress, setCloneProgress] = useState<string[]>([]);
   
   const [newBranchName, setNewBranchName] = useState('');
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const refreshGit = useCallback(async () => {
     if (!currentPath) return;
@@ -58,7 +60,7 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
       setHistory(h);
       const b = await invoke<BranchInfo[]>('get_branches', { path: currentPath });
       setBranches(b);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setStatus(null);
     } finally {
@@ -83,9 +85,10 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     try {
       await invoke('git_action', { path: currentPath, args });
       setCommitMsg('');
+      toastSuccess('Git Action', `Executed git ${args.join(' ')}`);
       await refreshGit();
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Git Action Failed', String(e));
     } finally {
       setLoading(false);
     }
@@ -96,9 +99,10 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     setLoading(true);
     try {
       await invoke('git_pull', { path: currentPath });
+      toastSuccess('Git Pull', 'Successfully pulled remote changes');
       await refreshGit();
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Git Pull Failed', String(e));
     } finally {
       setLoading(false);
     }
@@ -109,9 +113,10 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     setLoading(true);
     try {
       await invoke('git_fetch', { path: currentPath });
+      toastSuccess('Git Fetch', 'Successfully fetched remote branches');
       await refreshGit();
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Git Fetch Failed', String(e));
     } finally {
       setLoading(false);
     }
@@ -126,9 +131,10 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
         b = b.replace('remotes/origin/', '');
       }
       await invoke('git_checkout', { path: currentPath, branch: b });
+      toastSuccess('Git Checkout', `Checked out branch ${b}`);
       await refreshGit();
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Git Checkout Failed', String(e));
     } finally {
       setLoading(false);
     }
@@ -139,10 +145,11 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     setLoading(true);
     try {
       await invoke('git_create_branch', { path: currentPath, branch: newBranchName });
+      toastSuccess('Branch Created', `Created and checked out ${newBranchName}`);
       setNewBranchName('');
       await refreshGit();
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Create Branch Failed', String(e));
     } finally {
       setLoading(false);
     }
@@ -155,8 +162,9 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     try {
       const diff = await invoke<string>(isStaged ? 'get_staged_diff' : 'get_file_diff', { path: currentPath, file });
       setDiffContent(diff);
-    } catch (e) {
+    } catch (e: any) {
       setDiffContent('Error loading diff: ' + String(e));
+      toastError('Load Diff Failed', String(e));
     }
   };
 
@@ -166,12 +174,11 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     setCloneProgress([]);
     try {
       await invoke('git_clone', { url: cloneUrl, destination: cloneDest });
-    } catch (e) {
-      alert(e);
+      toastSuccess('Git Clone', `Cloned repository to ${cloneDest}`);
+    } catch (e: any) {
+      toastError('Git Clone Failed', String(e));
       setLoading(false);
     }
-    // We don't clear loading here, user has to wait for progress to finish or something, but we have no way to know when thread dies.
-    // For simplicity, we just clear loading after 2 seconds.
     setTimeout(() => setLoading(false), 2000);
   };
   
@@ -180,9 +187,10 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     setLoading(true);
     try {
       await invoke('git_stash', { path: currentPath });
+      toastSuccess('Git Stash', 'Stashed changes');
       await refreshGit();
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Git Stash Failed', String(e));
     } finally {
       setLoading(false);
     }
@@ -193,9 +201,10 @@ export const VisualGit = ({ currentPath }: { currentPath: string | null }) => {
     setLoading(true);
     try {
       await invoke('git_stash_pop', { path: currentPath });
+      toastSuccess('Git Stash Pop', 'Popped latest stash');
       await refreshGit();
-    } catch (e) {
-      alert(e);
+    } catch (e: any) {
+      toastError('Stash Pop Failed', String(e));
     } finally {
       setLoading(false);
     }

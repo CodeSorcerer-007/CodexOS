@@ -122,37 +122,49 @@ pub fn get_project_tasks(path: String) -> Result<std::collections::HashMap<Strin
     Ok(std::collections::HashMap::new())
 }
 
+fn get_hosts_path() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "C:\\Windows\\System32\\drivers\\etc\\hosts"
+    } else {
+        "/etc/hosts"
+    }
+}
+
 #[tauri::command]
 pub fn read_hosts() -> Result<String, String> {
-    let path = "C:\\Windows\\System32\\drivers\\etc\\hosts";
+    let path = get_hosts_path();
     std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn write_hosts(content: String) -> Result<(), String> {
-    let path = "C:\\Windows\\System32\\drivers\\etc\\hosts";
+    let path = get_hosts_path();
     if std::fs::write(path, &content).is_ok() {
         return Ok(());
     }
     
-    let temp_path = std::env::temp_dir().join("vaultly_hosts_tmp.txt");
-    std::fs::write(&temp_path, &content).map_err(|e| e.to_string())?;
-    
-    let script = format!(
-        "Start-Process powershell -ArgumentList '-NoProfile -Command Copy-Item -Path \"{}\" -Destination \"{}\" -Force' -Verb RunAs -WindowStyle Hidden -Wait",
-        temp_path.to_string_lossy(),
-        path
-    );
-    
-    let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .status()
-        .map_err(|e| e.to_string())?;
+    if cfg!(target_os = "windows") {
+        let temp_path = std::env::temp_dir().join("vaultly_hosts_tmp.txt");
+        std::fs::write(&temp_path, &content).map_err(|e| e.to_string())?;
         
-    if status.success() {
-        Ok(())
+        let script = format!(
+            "Start-Process powershell -ArgumentList '-NoProfile -Command Copy-Item -Path \"{}\" -Destination \"{}\" -Force' -Verb RunAs -WindowStyle Hidden -Wait",
+            temp_path.to_string_lossy(),
+            path
+        );
+        
+        let status = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-Command", &script])
+            .status()
+            .map_err(|e| e.to_string())?;
+            
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Failed to acquire Administrator privileges to save hosts file.".to_string())
+        }
     } else {
-        Err("Failed to acquire Administrator privileges to save hosts file.".to_string())
+        Err("Permission denied: Modifying /etc/hosts requires root privileges (sudo).".to_string())
     }
 }
 

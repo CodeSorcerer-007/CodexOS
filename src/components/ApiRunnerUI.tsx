@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 export const ApiRunnerUI = ({ content }: { content: string }) => {
   const [response, setResponse] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { error: toastError } = useToast();
 
   const lines = content.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
   let method = 'GET';
@@ -31,8 +33,9 @@ export const ApiRunnerUI = ({ content }: { content: string }) => {
     try {
       const res = await invoke<string>('execute_http_request', { url, method, body });
       setResponse(res);
-    } catch (e) {
+    } catch (e: any) {
       setResponse(`Error: ${e}`);
+      toastError('HTTP Request Failed', String(e));
     }
     setLoading(false);
   };

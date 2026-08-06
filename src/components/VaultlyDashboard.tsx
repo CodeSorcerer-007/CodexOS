@@ -32,7 +32,9 @@ export const VaultlyDashboard = ({ onOpenApp }: DashboardProps) => {
       try {
         const stats = await invoke<SysStats>('get_sys_stats');
         setSysStats(stats);
-      } catch {}
+      } catch (e: any) {
+        console.warn("Failed to fetch sys stats:", e);
+      }
     };
     fetchStats();
     const interval = setInterval(fetchStats, 2000);
@@ -148,7 +150,7 @@ export const VaultlyDashboard = ({ onOpenApp }: DashboardProps) => {
           <div className="flex items-center gap-4 z-10">
             <div className="p-4 bg-pink-500/10 rounded-xl"><ShieldAlert className="w-8 h-8 text-pink-400" /></div>
             <div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">ZKP</div>
+              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">HMAC Proof</div>
               <div className="text-xl font-black text-white">Initialized</div>
             </div>
           </div>

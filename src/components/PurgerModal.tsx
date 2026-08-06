@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 interface BloatItem {
   path: string;
@@ -13,6 +14,16 @@ export const PurgerModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () 
   const [items, setItems] = useState<BloatItem[]>([]);
   const [scanning, setScanning] = useState(false);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const { success: toastSuccess, error: toastError } = useToast();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   useEffect(() => {
     if (isOpen) {
@@ -27,9 +38,10 @@ export const PurgerModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () 
       const currentDir = await invoke<string>('get_current_dir');
       const result = await invoke<BloatItem[]>('scan_dev_bloat', { path: currentDir });
       setItems(result);
-      setSelectedPaths(new Set(result.map(i => i.path)));
-    } catch (e) {
+      setSelectedPaths(new Set()); // Default all items to UNCHECKED for safety
+    } catch (e: any) {
       console.error(e);
+      toastError('Bloat Scan Failed', String(e));
     }
     setScanning(false);
   };
@@ -48,10 +60,12 @@ export const PurgerModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () 
     if (selectedPaths.size === 0) return;
     try {
       await invoke('purge_directories', { paths: Array.from(selectedPaths) });
+      toastSuccess('Purge Completed', `Reclaimed ${totalSaved} MB of disk space`);
       setItems(items.filter(i => !selectedPaths.has(i.path)));
       setSelectedPaths(new Set());
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      toastError('Purge Failed', String(e));
     }
   };
 

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 export const FontViewer = ({ path, fileName }: { path: string, fileName: string }) => {
   const [installing, setInstalling] = useState(false);
+  const { success: toastSuccess, error: toastError } = useToast();
   
   // Since browser security prevents loading arbitrary local fonts without @font-face and object urls,
   // we'd normally create a blob URL, but for simplicity we'll just show the UI for installing.
@@ -13,9 +15,9 @@ export const FontViewer = ({ path, fileName }: { path: string, fileName: string 
     setInstalling(true);
     try {
       const result = await invoke<string>('install_font', { path });
-      alert(result);
-    } catch (e) {
-      alert(`Failed to install font: ${e}`);
+      toastSuccess('Font Installed', result);
+    } catch (e: any) {
+      toastError('Font Install Failed', String(e));
     }
     setInstalling(false);
   };

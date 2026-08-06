@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -9,6 +10,14 @@ interface LocalServerModalProps {
 }
 
 export const LocalServerModal = ({ isOpen, onClose, serverUrl, path }: LocalServerModalProps) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
   return (
     <AnimatePresence>
       {isOpen && serverUrl && (

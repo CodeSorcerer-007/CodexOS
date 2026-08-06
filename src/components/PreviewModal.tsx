@@ -123,7 +123,7 @@ export const PreviewModal = ({ isOpen, onClose, fileName, fileContent, binaryDat
           setJwtData({ header, payload });
           return;
         }
-      } catch (e) {
+      } catch (_) {
         // Not a valid JWT
       }
     }

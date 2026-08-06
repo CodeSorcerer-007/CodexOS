@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 interface GpuInfo {
   name: string;
@@ -13,22 +14,29 @@ export const GPUCluster = () => {
   const [utilization, setUtilization] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { error: toastError } = useToast();
 
   useEffect(() => {
     invoke<GpuInfo[]>('get_gpu_info')
       .then(setGpus)
-      .catch(e => setError(String(e)))
+      .catch(e => {
+        const errStr = String(e);
+        setError(errStr);
+        toastError('GPU Detection Failed', errStr);
+      })
       .finally(() => setLoading(false));
     
     const poll = setInterval(async () => {
       try {
         const util = await invoke<number>('get_gpu_utilization');
         setUtilization(util);
-      } catch {}
+      } catch (e: any) {
+        console.warn("GPU utilization polling issue:", e);
+      }
     }, 2000);
     
     return () => clearInterval(poll);
-  }, []);
+  }, [toastError]);
 
   return (
     <div className="flex flex-col h-full w-full bg-[#0a0f18] text-white p-6 gap-6">

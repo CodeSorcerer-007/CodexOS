@@ -1,10 +1,29 @@
 use crate::files::FileInfo;
 
+fn validate_connection(connection: &str) -> Result<(), String> {
+    let trimmed = connection.trim();
+    if trimmed.starts_with('-') {
+        return Err("Invalid SSH connection string: Flags are not permitted.".to_string());
+    }
+    if trimmed.is_empty() || trimmed.contains(|c: char| c.is_whitespace() || ";|&$`<>".contains(c)) {
+        return Err("Invalid SSH connection target format.".to_string());
+    }
+    Ok(())
+}
+
+fn escape_shell_arg(arg: &str) -> String {
+    format!("'{}'", arg.replace('\'', "'\\''"))
+}
+
 #[tauri::command]
 pub fn ssh_list_dir(connection: String, path: String) -> Result<Vec<FileInfo>, String> {
+    validate_connection(&connection)?;
+    let safe_path = escape_shell_arg(&path);
+    let remote_cmd = format!("find {} -maxdepth 1 -printf '%y|%s|%f\\n'", safe_path);
+
     let output = std::process::Command::new("ssh")
         .arg(&connection)
-        .arg(format!("find \"{}\" -maxdepth 1 -printf '%y|%s|%f\\n'", path))
+        .arg(remote_cmd)
         .output()
         .map_err(|e| format!("Failed to execute ssh: {}", e))?;
 
@@ -54,9 +73,13 @@ pub fn ssh_list_dir(connection: String, path: String) -> Result<Vec<FileInfo>, S
 
 #[tauri::command]
 pub fn ssh_read_file_text(connection: String, path: String) -> Result<String, String> {
+    validate_connection(&connection)?;
+    let safe_path = escape_shell_arg(&path);
+    let remote_cmd = format!("cat {}", safe_path);
+
     let output = std::process::Command::new("ssh")
         .arg(&connection)
-        .arg(format!("cat \"{}\"", path))
+        .arg(remote_cmd)
         .output()
         .map_err(|e| format!("Failed to execute ssh: {}", e))?;
 

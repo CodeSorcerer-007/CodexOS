@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 interface DocIndex {
   name: string;
@@ -12,15 +13,16 @@ export const DevDocsViewer = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<DocIndex[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
+  const { error: toastError } = useToast();
 
   const searchDocs = async () => {
     if (!docsetPath || !query) return;
     try {
       const res = await invoke<DocIndex[]>('query_docset', { docsetPath, query });
       setResults(res);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert(e);
+      toastError('Search Failed', String(e));
     }
   };
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import Editor from '@monaco-editor/react';
+import { useToast } from '../store/store';
 
 interface ZipEntryInfo {
   name: string;
@@ -16,6 +17,7 @@ export const ArchiveBrowser = ({ zipPath }: ArchiveBrowserProps) => {
   const [entries, setEntries] = useState<ZipEntryInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { error: toastError } = useToast();
   
   const [previewFile, setPreviewFile] = useState<string | null>(null);
   const [previewContent, setPreviewContent] = useState<string | null>(null);
@@ -25,9 +27,12 @@ export const ArchiveBrowser = ({ zipPath }: ArchiveBrowserProps) => {
     setLoading(true);
     invoke<ZipEntryInfo[]>('list_zip_contents', { path: zipPath })
       .then(res => setEntries(res))
-      .catch(e => setError(String(e)))
+      .catch(e => {
+        setError(String(e));
+        toastError('Archive Read Error', String(e));
+      })
       .finally(() => setLoading(false));
-  }, [zipPath]);
+  }, [zipPath, toastError]);
 
   const handlePreview = async (entryName: string) => {
     setPreviewFile(entryName);
@@ -37,8 +42,9 @@ export const ArchiveBrowser = ({ zipPath }: ArchiveBrowserProps) => {
     try {
       const content = await invoke<string>('read_zip_file', { zipPath, internalPath: entryName });
       setPreviewContent(content);
-    } catch (e) {
+    } catch (e: any) {
       setPreviewContent(`// Failed to preview file: ${e}\n// Note: Vaultly currently supports previewing text/code files within archives.`);
+      toastError('Preview Error', String(e));
     } finally {
       setPreviewLoading(false);
     }

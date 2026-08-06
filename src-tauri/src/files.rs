@@ -84,6 +84,22 @@ pub fn write_file_text(path: String, content: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn create_file(path: String) -> Result<(), String> {
+    std::fs::File::create(&path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn create_directory(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn rename_path(old_path: String, new_path: String) -> Result<(), String> {
+    std::fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn read_file_binary(path: String) -> Result<Vec<u8>, String> {
     fs::read(path).map_err(|e| e.to_string())
 }
@@ -372,4 +388,23 @@ pub fn get_code_metrics(path: String) -> Result<CodeMetrics, String> {
     
     scan_dir(std::path::Path::new(&path), &mut metrics)?;
     Ok(metrics)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn test_build_tree_empty() {
+        let temp_dir = std::env::temp_dir().join("vaultly_test_build_tree");
+        let _ = fs::create_dir_all(&temp_dir);
+        let tree = build_tree(&temp_dir, 0, 2);
+        
+        assert_eq!(tree.size, 0);
+        assert_eq!(tree.children.len(), 0);
+        
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
 }

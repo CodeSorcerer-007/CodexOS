@@ -1,67 +1,139 @@
+use keyring::Entry;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::process::Command;
 use serde::{Deserialize, Serialize};
+
+#[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-// In-memory store for secrets during the session
-pub struct SecretsState(pub Mutex<HashMap<String, String>>);
+const SERVICE_NAME: &str = "vaultly";
+
+pub struct SecretsState {
+    pub cache: Mutex<HashMap<String, String>>,
+    pub known_keys: Mutex<Vec<String>>,
+}
 
 impl SecretsState {
     pub fn new() -> Self {
-        SecretsState(Mutex::new(HashMap::new()))
+        let state = SecretsState {
+            cache: Mutex::new(HashMap::new()),
+            known_keys: Mutex::new(Vec::new()),
+        };
+        // Load known keys from a special keyring entry on startup
+        if let Ok(entry) = Entry::new(SERVICE_NAME, "__vault_keys__") {
+            if let Ok(keys_json) = entry.get_password() {
+                if let Ok(keys) = serde_json::from_str::<Vec<String>>(&keys_json) {
+                    *state.known_keys.lock().unwrap() = keys;
+                }
+            }
+        }
+        state
+    }
+    
+    fn persist_keys(&self) {
+        let keys = self.known_keys.lock().unwrap().clone();
+        if let Ok(entry) = Entry::new(SERVICE_NAME, "__vault_keys__") {
+            let _ = entry.set_password(&serde_json::to_string(&keys).unwrap_or_default());
+        }
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct SecretItem {
-    pub key: String,
-    pub value: String,
-}
-
 #[tauri::command]
-pub fn add_secret(state: tauri::State<'_, SecretsState>, key: String, value: String) -> Result<(), String> {
-    let mut secrets = state.0.lock().unwrap();
-    secrets.insert(key, value);
+pub fn add_secret(
+    state: tauri::State<'_, SecretsState>,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    if !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return Err("Key name must be alphanumeric with underscores only".to_string());
+    }
+    
+    let entry = Entry::new(SERVICE_NAME, &key)
+        .map_err(|e| format!("Keyring error: {}", e))?;
+    entry.set_password(&value)
+        .map_err(|e| format!("Failed to store secret: {}", e))?;
+    
+    state.cache.lock().unwrap().insert(key.clone(), value);
+    
+    let mut keys = state.known_keys.lock().unwrap();
+    if !keys.contains(&key) {
+        keys.push(key.clone());
+        drop(keys);
+        state.persist_keys();
+    }
+    
     Ok(())
 }
 
 #[tauri::command]
 pub fn list_secret_keys(state: tauri::State<'_, SecretsState>) -> Vec<String> {
-    let secrets = state.0.lock().unwrap();
-    secrets.keys().cloned().collect()
+    state.known_keys.lock().unwrap().clone()
 }
 
 #[tauri::command]
-pub fn remove_secret(state: tauri::State<'_, SecretsState>, key: String) -> Result<(), String> {
-    let mut secrets = state.0.lock().unwrap();
-    secrets.remove(&key);
+pub fn remove_secret(
+    state: tauri::State<'_, SecretsState>,
+    key: String,
+) -> Result<(), String> {
+    if let Ok(entry) = Entry::new(SERVICE_NAME, &key) {
+        let _ = entry.delete_credential();
+    }
+    
+    state.cache.lock().unwrap().remove(&key);
+    
+    let mut keys = state.known_keys.lock().unwrap();
+    keys.retain(|k| k != &key);
+    drop(keys);
+    state.persist_keys();
+    
     Ok(())
 }
 
 #[tauri::command]
-pub fn run_with_secrets(state: tauri::State<'_, SecretsState>, cmd: String, required_keys: Vec<String>) -> Result<String, String> {
-    let secrets = state.0.lock().unwrap();
+pub fn run_with_secrets(
+    state: tauri::State<'_, SecretsState>,
+    cmd: String,
+    required_keys: Vec<String>,
+) -> Result<String, String> {
+    let mut envs = HashMap::new();
     
-    let mut envs_to_inject = HashMap::new();
-    for key in required_keys {
-        if let Some(val) = secrets.get(&key) {
-            envs_to_inject.insert(key, val.clone());
+    for key in &required_keys {
+        let cached = state.cache.lock().unwrap().get(key).cloned();
+        
+        let value = if let Some(v) = cached {
+            v
         } else {
-            return Err(format!("Secret '{}' not found in vault.", key));
-        }
+            let entry = Entry::new(SERVICE_NAME, key)
+                .map_err(|e| format!("Keyring error for '{}': {}", key, e))?;
+            let v = entry.get_password()
+                .map_err(|_| format!("Secret '{}' not found in vault.", key))?;
+            state.cache.lock().unwrap().insert(key.clone(), v.clone());
+            v
+        };
+        
+        envs.insert(key.clone(), value);
     }
+    
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let mut cmd_obj = std::process::Command::new("cmd");
+        cmd_obj.args(&["/C", &cmd]).creation_flags(CREATE_NO_WINDOW);
+        cmd_obj
+    };
 
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    #[cfg(not(target_os = "windows"))]
+    let mut command = {
+        let mut cmd_obj = std::process::Command::new("sh");
+        cmd_obj.args(&["-c", &cmd]);
+        cmd_obj
+    };
 
-    // Run the command with injected envs
-    let output = Command::new("cmd")
-        .args(&["/C", &cmd])
-        .envs(&envs_to_inject)
-        .creation_flags(CREATE_NO_WINDOW)
+    let output = command
+        .envs(&envs)
         .output()
-        .map_err(|e| format!("Failed to execute command: {}", e))?;
-
+        .map_err(|e| format!("Failed to execute: {}", e))?;
+    
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
@@ -69,32 +141,22 @@ pub fn run_with_secrets(state: tauri::State<'_, SecretsState>, cmd: String, requ
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Mock Tauri state injection for tests
-    struct MockState(SecretsState);
-    impl<'r> tauri::State<'r, SecretsState> for MockState {
-        // Rust tests don't easily allow mocking Tauri's State type due to its private fields,
-        // but we can test the internal logic directly without the tauri::command wrapper.
+#[tauri::command]
+pub fn export_secrets_to_env(
+    state: tauri::State<'_, SecretsState>,
+    output_path: String,
+) -> Result<(), String> {
+    let keys = state.known_keys.lock().unwrap().clone();
+    let mut lines = Vec::new();
+    
+    for key in keys {
+        let entry = Entry::new(SERVICE_NAME, &key)
+            .map_err(|e| format!("Keyring error: {}", e))?;
+        let value = entry.get_password()
+            .map_err(|e| format!("Failed to read '{}': {}", key, e))?;
+        lines.push(format!("{}={}", key, value));
     }
-
-    #[test]
-    fn test_secret_storage() {
-        let state = SecretsState::new();
-        
-        {
-            let mut secrets = state.0.lock().unwrap();
-            secrets.insert("TEST_KEY".to_string(), "TEST_VALUE".to_string());
-        }
-
-        let keys = {
-            let secrets = state.0.lock().unwrap();
-            secrets.keys().cloned().collect::<Vec<String>>()
-        };
-
-        assert_eq!(keys.len(), 1);
-        assert_eq!(keys[0], "TEST_KEY");
-    }
+    
+    std::fs::write(&output_path, lines.join("\n"))
+        .map_err(|e| e.to_string())
 }

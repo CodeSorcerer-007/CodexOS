@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
         title: 'Module Error',
         message: error.message
       });
-    } catch (e) {
+    } catch (_) {
       // Ignore if store isn't ready
     }
   }

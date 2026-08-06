@@ -45,7 +45,7 @@ pub fn start_tunnel(
     // ssh -R 80:localhost:{port} nokey@serveo.net
     let mut child = Command::new("ssh")
         .args([
-            "-o", "StrictHostKeyChecking=no",
+            "-o", "StrictHostKeyChecking=accept-new",
             "-o", "ServerAliveInterval=60",
             "-R", &format!("80:localhost:{}", local_port),
             "nokey@serveo.net",

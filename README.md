@@ -26,13 +26,13 @@ Vaultly v2 is packed with high-performance native modules executing completely o
 - **Database Studio**: Local SQLite management with query analysis.
 - **Docker Dashboard**: Monitor containers, networks, and images in real-time.
 - **Network Interceptor**: Sniff and analyze raw local TCP/UDP packets.
-- **AST Refactoring Engine**: Semantically analyze and manipulate code trees locally.
+- **AST Refactoring Engine**: Semantically analyze and manipulate code trees locally via Tree-sitter.
 - **ZKP Vault**: Zero-Knowledge Proof based encryption for in-memory secret storage.
-- **GPU Cluster**: Local AI compute bridging via your native hardware.
-- **CRDT Collab Editor**: Conflict-free replicated data types for peer-to-peer code editing.
-- **Port Tunneling**: Secure local forwarding and reverse proxies.
-- **Live Memory Profiler**: Heatmaps and active process memory tracking.
-- **Plugin Sandbox**: WASM-based isolated plugin execution environment.
+- **Local AI & GPU Cluster**: Offline LLM queries via local Ollama and GPU hardware metrics.
+- **CRDT Collab Editor**: Conflict-free replicated data types for peer-to-peer code editing (y-webrtc).
+- **Port Tunneling**: Secure local forwarding and reverse proxies via bore.
+- **Multi-Tab Architecture**: Seamlessly switch between different environments with `Ctrl+1..8` global hotkeys.
+- **Cross-Platform Native Integrations**: OS-aware APIs wrapped inside Tauri invoking native functionality.
 
 ## 🛠️ Tech Stack
 
@@ -55,6 +55,12 @@ npm install
 
 # Run the Dev Server (Frontend + Native Backend Hot-Reloading)
 npm run tauri dev
+
+# Run Vitest Component Tests
+npm run test
+
+# Run Rust Core Tests
+cd src-tauri && cargo test
 
 # Build the production executable
 npm run tauri build

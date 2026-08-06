@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 export const ZKPVault = () => {
   const [vaultData, setVaultData] = useState('Secret Source Code 123');
@@ -10,14 +11,16 @@ export const ZKPVault = () => {
   const [verifyData, setVerifyData] = useState('Secret Source Code 123');
   const [verifyKey, setVerifyKey] = useState('super_secret_key');
   const [isValid, setIsValid] = useState<boolean | null>(null);
+  const { error: toastError } = useToast();
 
   const generateProof = async () => {
     try {
       const p = await invoke<string>('generate_zk_proof', { vaultData, secretKey });
       setProof(p);
       setVerifyProof(p);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      toastError('HMAC Proof Generation Failed', String(e));
     }
   };
 
@@ -29,8 +32,9 @@ export const ZKPVault = () => {
         secretKey: verifyKey 
       });
       setIsValid(valid);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      toastError('HMAC Verification Error', String(e));
       setIsValid(false);
     }
   };
@@ -40,8 +44,11 @@ export const ZKPVault = () => {
       {/* Prover Section */}
       <div className="w-1/2 border-r border-white/10 p-6 flex flex-col gap-6">
         <div>
-          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">ZKP Generator (Prover)</h2>
-          <p className="text-sm text-gray-400">Mathematically prove you possess a vault without transmitting it.</p>
+          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">HMAC Proof Generator</h2>
+          <p className="text-sm text-gray-400 mb-4">Generate an HMAC-SHA256 proof that you possess data with a given key.</p>
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 text-xs text-blue-300">
+            ℹ️ Uses HMAC-SHA256 for proof generation. This is a symmetric commitment scheme, not a true zero-knowledge proof.
+          </div>
         </div>
 
         <div>
@@ -52,7 +59,7 @@ export const ZKPVault = () => {
             className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-fuchsia-500 focus:outline-none transition-colors mb-4 h-24"
           />
 
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Secret ZK Key</label>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Secret HMAC Key</label>
           <input 
             type="text"
             value={secretKey}
@@ -64,13 +71,13 @@ export const ZKPVault = () => {
             onClick={generateProof}
             className="w-full px-4 py-3 bg-fuchsia-600 hover:bg-fuchsia-500 rounded font-bold transition-colors shadow-[0_0_15px_rgba(192,38,211,0.3)]"
           >
-            Generate SNARK Proof
+            Generate HMAC Proof
           </button>
         </div>
 
         {proof && (
           <div className="mt-4 p-4 bg-black border border-white/10 rounded-lg">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Generated Proof Hash</h3>
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Generated HMAC Hash</h3>
             <div className="text-fuchsia-300 font-mono text-xs break-all">{proof}</div>
           </div>
         )}
@@ -79,8 +86,8 @@ export const ZKPVault = () => {
       {/* Verifier Section */}
       <div className="flex-1 p-6 flex flex-col gap-6 bg-black/40">
         <div>
-          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">ZKP Verifier</h2>
-          <p className="text-sm text-gray-400">Verify a peer's vault commitment.</p>
+          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">HMAC Proof Verifier</h2>
+          <p className="text-sm text-gray-400">Verify an HMAC-SHA256 proof matches the expected data and key.</p>
         </div>
 
         <div>

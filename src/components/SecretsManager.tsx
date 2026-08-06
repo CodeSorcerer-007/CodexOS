@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { open, save } from '@tauri-apps/plugin-dialog';
+import { Lock, Download, Upload, Trash2 } from 'lucide-react';
+import { useToast, useStore } from '../store/store';
 
 export const SecretsManager = () => {
   const [keys, setKeys] = useState<string[]>([]);
@@ -8,19 +11,22 @@ export const SecretsManager = () => {
   const [cmd, setCmd] = useState('echo "My secret is: %MY_API_KEY%"');
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [cmdOutput, setCmdOutput] = useState('');
+  const { success, error } = useToast();
+  const setSecretsCount = useStore(s => s.setSecretsCount);
 
-  const fetchKeys = async () => {
+  const fetchKeys = useCallback(async () => {
     try {
       const k = await invoke<string[]>('list_secret_keys');
       setKeys(k);
-    } catch (e) {
-      console.error(e);
+      setSecretsCount(k.length);
+    } catch (e: any) {
+      error('Failed to fetch keys', String(e));
     }
-  };
+  }, [setSecretsCount, error]);
 
   useEffect(() => {
     fetchKeys();
-  }, []);
+  }, [fetchKeys]);
 
   const addSecret = async () => {
     if (!newKey || !newVal) return;
@@ -29,8 +35,9 @@ export const SecretsManager = () => {
       setNewKey('');
       setNewVal('');
       fetchKeys();
-    } catch (e) {
-      console.error(e);
+      success(`Secret ${newKey} stored in OS Keyring`);
+    } catch (e: any) {
+      error('Failed to add secret', String(e));
     }
   };
 
@@ -39,18 +46,61 @@ export const SecretsManager = () => {
       await invoke('remove_secret', { key });
       setSelectedKeys(prev => prev.filter(k => k !== key));
       fetchKeys();
-    } catch (e) {
-      console.error(e);
+      success(`Secret ${key} removed from OS Keyring`);
+    } catch (e: any) {
+      error('Failed to remove secret', String(e));
     }
   };
 
-  const toggleKeySelection = (key: string) => {
-    if (selectedKeys.includes(key)) {
-      setSelectedKeys(prev => prev.filter(k => k !== key));
-    } else {
-      setSelectedKeys(prev => [...prev, key]);
+  const importEnvFile = async () => {
+    try {
+      const path = await open({ filters: [{ name: 'Env', extensions: ['env', 'txt'] }] });
+      if (!path) return;
+      
+      const content = await invoke<string>('read_file_text', { path });
+      const lines = content.split('\n').filter(l => l.includes('=') && !l.startsWith('#'));
+      
+      let imported = 0;
+      for (const line of lines) {
+        const [key, ...valueParts] = line.split('=');
+        if (key && key.trim()) {
+          await invoke('add_secret', { key: key.trim(), value: valueParts.join('=').trim() });
+          imported++;
+        }
+      }
+      
+      fetchKeys();
+      if (imported > 0) {
+        success(`Imported ${imported} secrets from .env file`);
+      } else {
+        error('No valid secrets found in file', '');
+      }
+    } catch (e: any) {
+      error('Failed to import .env file', String(e));
     }
   };
+
+  const exportEnvFile = async () => {
+    try {
+      const path = await save({ defaultPath: '.env', filters: [{ name: 'Env', extensions: ['env'] }] });
+      if (!path) return;
+      
+      await invoke('export_secrets_to_env', { outputPath: path });
+      success('Secrets exported successfully');
+    } catch (e: any) {
+      error('Failed to export .env file', String(e));
+    }
+  };
+
+  const toggleKeySelection = useCallback((key: string) => {
+    setSelectedKeys(prev => {
+      if (prev.includes(key)) {
+        return prev.filter(k => k !== key);
+      } else {
+        return [...prev, key];
+      }
+    });
+  }, []);
 
   const executeCmd = async () => {
     setCmdOutput('Executing...');
@@ -70,8 +120,30 @@ export const SecretsManager = () => {
       {/* Secrets Vault */}
       <div className="w-1/2 border-r border-white/10 p-6 flex flex-col gap-6">
         <div>
-          <h2 className="font-bold text-yellow-500 text-xl mb-2">Secrets Manager</h2>
-          <p className="text-sm text-gray-400">Store API keys safely in memory. No plaintext `.env` files.</p>
+          <div className="flex items-center gap-2 mb-2">
+            <h2 className="font-bold text-yellow-500 text-xl">Secrets Manager</h2>
+            <div className="flex items-center gap-1 bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded text-xs font-bold">
+              <Lock size={12} />
+              Secured by OS Keyring
+            </div>
+          </div>
+          <p className="text-sm text-gray-400">Store API keys safely using native OS persistence. No plaintext `.env` files lying around.</p>
+        </div>
+
+        <div className="flex gap-2">
+          <button 
+            onClick={importEnvFile}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded text-xs font-bold transition-colors"
+          >
+            <Upload size={14} /> Import .env
+          </button>
+          <button 
+            onClick={exportEnvFile}
+            disabled={keys.length === 0}
+            className="flex items-center gap-2 px-3 py-1.5 bg-purple-600/20 hover:bg-purple-600/30 disabled:opacity-50 text-purple-400 border border-purple-500/30 rounded text-xs font-bold transition-colors"
+          >
+            <Download size={14} /> Export .env
+          </button>
         </div>
 
         <div className="flex gap-2">
@@ -99,20 +171,24 @@ export const SecretsManager = () => {
 
         <div className="flex-1 overflow-y-auto flex flex-col gap-2">
           {keys.map(k => (
-            <div key={k} className="flex justify-between items-center bg-black border border-white/10 rounded p-3">
-              <span className="font-mono text-sm text-yellow-300">{k}</span>
+            <div key={k} className="flex justify-between items-center bg-black border border-white/10 rounded p-3 group hover:border-white/20 transition-colors">
+              <div className="flex flex-col gap-1">
+                <span className="font-mono text-sm text-yellow-300">{k}</span>
+                <span className="text-[10px] text-green-500/70 uppercase tracking-wider font-bold">Persistent</span>
+              </div>
               <div className="flex items-center gap-4">
                 <span className="font-mono text-xs text-gray-500">****************</span>
                 <button 
                   onClick={() => removeSecret(k)}
-                  className="text-red-400 hover:text-red-300 text-xs font-bold"
+                  className="text-gray-500 hover:text-red-400 transition-colors"
+                  title="Delete Secret"
                 >
-                  Delete
+                  <Trash2 size={16} />
                 </button>
               </div>
             </div>
           ))}
-          {keys.length === 0 && <div className="text-gray-500 text-sm italic">No secrets in memory vault.</div>}
+          {keys.length === 0 && <div className="text-gray-500 text-sm italic">No secrets in vault. Import a .env file or add one manually.</div>}
         </div>
       </div>
 
@@ -120,7 +196,7 @@ export const SecretsManager = () => {
       <div className="w-1/2 p-6 flex flex-col gap-6 bg-black/40">
         <div>
           <h2 className="font-bold text-yellow-500 text-xl mb-2">Environment Injector</h2>
-          <p className="text-sm text-gray-400">Run scripts with secrets injected at runtime.</p>
+          <p className="text-sm text-gray-400">Run scripts with secrets securely injected into the environment at runtime.</p>
         </div>
 
         <div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useToast } from '../store/store';
 
 interface PortInfo {
   port: string;
@@ -11,14 +12,16 @@ interface PortInfo {
 export const PortKillerDashboard = () => {
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const { success: toastSuccess, error: toastError } = useToast();
 
   const fetchPorts = async () => {
     setLoading(true);
     try {
       const data = await invoke<PortInfo[]>('get_active_ports');
       setPorts(data);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      toastError('Failed to fetch active ports', String(e));
     } finally {
       setLoading(false);
     }
@@ -33,9 +36,10 @@ export const PortKillerDashboard = () => {
   const handleKill = async (pid: string) => {
     try {
       await invoke('kill_process', { pid });
+      toastSuccess('Process Terminated', `Killed process PID ${pid}`);
       fetchPorts(); // refresh after kill
-    } catch (e) {
-      alert("Failed to kill process: " + e);
+    } catch (e: any) {
+      toastError('Failed to kill process', String(e));
     }
   };
 

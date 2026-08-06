@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, HardDrive, Network, GitBranch, TerminalSquare, Settings, Workflow, Box, ShieldAlert, Zap, Layers, MonitorPlay, Key, Webhook, Activity, Users, Cpu, Store } from 'lucide-react';
@@ -27,15 +27,21 @@ const CollaborativeEditor = lazy(() => import('./components/CollaborativeEditor'
 const SecretsManager = lazy(() => import('./components/SecretsManager').then(m => ({ default: m.SecretsManager })));
 const PortTunnel = lazy(() => import('./components/PortTunnel').then(m => ({ default: m.PortTunnel })));
 const VaultlyDashboard = lazy(() => import('./components/VaultlyDashboard').then(m => ({ default: m.VaultlyDashboard })));
+const SettingsPage = lazy(() => import('./components/SettingsPage').then(m => ({ default: m.SettingsPage })));
+
+import { TabBar } from './components/TabBar';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { KeyboardHelp } from './components/KeyboardHelp';
+import { OnboardingWizard } from './components/OnboardingWizard';
 
 export interface Tab {
   id: string;
   name: string;
-  activeApp: 'home' | 'files' | 'docker' | 'network' | 'database' | 'git' | 'devdocs' | 'terminal' | 'automation' | 'plugins' | 'sandbox' | 'ai' | 'memory' | 'market' | 'ast' | 'zkp' | 'gpu' | 'crdt' | 'secrets' | 'tunnel';
+  activeApp: 'home' | 'files' | 'docker' | 'network' | 'database' | 'git' | 'devdocs' | 'terminal' | 'automation' | 'plugins' | 'sandbox' | 'ai' | 'memory' | 'market' | 'ast' | 'zkp' | 'gpu' | 'crdt' | 'secrets' | 'tunnel' | 'settings';
   currentPath: string | null;
 }
 
-const SIDEBAR_ITEMS = [
+export const SIDEBAR_ITEMS = [
   { id: 'home', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
   { id: 'files', icon: <HardDrive size={20} />, label: 'Vaults' },
   { id: 'git', icon: <GitBranch size={20} />, label: 'Git Client' },
@@ -59,22 +65,24 @@ const SIDEBAR_ITEMS = [
 
 
 function App() {
+  const [showOnboarding, setShowOnboarding] = useState(
+    localStorage.getItem('vaultly-onboarded') !== 'true'
+  );
+  
+  useKeyboardShortcuts();
+  
   const activeApp = useStore(state => state.activeApp);
   const setActiveApp = useStore(state => state.setActiveApp);
   const currentPath = useStore(state => state.currentPath);
   const setCurrentPath = useStore(state => state.setCurrentPath);
   const selectedFile = useStore(state => state.selectedFile);
   const setSelectedFile = useStore(state => state.setSelectedFile);
-  const canGoBack = useStore(state => state.canGoBack);
-  const canGoForward = useStore(state => state.canGoForward);
-  const goBack = useStore(state => state.goBack);
-  const goForward = useStore(state => state.goForward);
 
   // Simple render map for animations
   const renderApp = () => {
     switch(activeApp) {
       case 'home': return <VaultlyDashboard onOpenApp={setActiveApp} />;
-      case 'files': return <FileGrid currentPath={currentPath || ""} onNavigate={setCurrentPath} selectedFile={selectedFile} onSelect={setSelectedFile} onBack={goBack} onForward={goForward} canGoBack={canGoBack} canGoForward={canGoForward} />;
+      case 'files': return <FileGrid currentPath={currentPath || ""} onNavigate={setCurrentPath} selectedFile={selectedFile} onSelect={setSelectedFile} />;
       case 'docker': return <DockerDashboard />;
       case 'network': return <NetworkInterceptor />;
       case 'database': return <DatabaseStudio />;
@@ -84,7 +92,7 @@ function App() {
       case 'automation': return <AutomationStudio />;
       case 'plugins': return <PluginManager currentPath={currentPath} />;
       case 'sandbox': return <SandboxManager currentPath={currentPath} />;
-      case 'ai': return <LocalAI currentPath={currentPath} />;
+      case 'ai': return <LocalAI />;
       case 'memory': return <MemoryProfiler />;
       case 'market': return <PluginMarketplace />;
       case 'ast': return <ASTRefactor currentPath={currentPath} />;
@@ -93,6 +101,7 @@ function App() {
       case 'crdt': return <CollaborativeEditor currentPath={currentPath} />;
       case 'secrets': return <SecretsManager />;
       case 'tunnel': return <PortTunnel />;
+      case 'settings': return <SettingsPage />;
       default: return <VaultlyDashboard onOpenApp={setActiveApp} />;
     }
   };
@@ -119,7 +128,7 @@ function App() {
 
         {/* Scrollable Nav Items */}
         <div className="flex-1 w-full overflow-y-auto overflow-x-hidden no-scrollbar pb-6 flex flex-col gap-1 px-2 group-hover:px-4">
-          {SIDEBAR_ITEMS.map((item) => {
+          {SIDEBAR_ITEMS.map((item, index) => {
             const isActive = activeApp === item.id;
             return (
               <button
@@ -142,7 +151,7 @@ function App() {
                 <div className="w-12 h-12 flex items-center justify-center shrink-0">
                   {item.icon}
                 </div>
-                <span className="font-medium text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <span className="font-medium text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200" title={`${item.label} (Ctrl+${index + 1})`}>
                   {item.label}
                 </span>
               </button>
@@ -152,7 +161,20 @@ function App() {
 
         {/* Settings at Bottom */}
         <div className="mt-auto w-full p-2 group-hover:p-4 border-t border-white/5 bg-black/40">
-          <button className="w-full flex items-center h-12 rounded-xl text-gray-500 hover:bg-white/5 hover:text-gray-300 transition-all duration-200">
+          <button 
+            onClick={() => setActiveApp('settings')}
+            className={`w-full flex items-center h-12 rounded-xl transition-all duration-200 relative
+              ${activeApp === 'settings' 
+                ? 'bg-white/10 text-white' 
+                : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
+              }`}
+          >
+            {activeApp === 'settings' && (
+              <motion.div 
+                layoutId="activeTabIndicator"
+                className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 rounded-r-full" 
+              />
+            )}
             <div className="w-12 h-12 flex items-center justify-center shrink-0"><Settings size={20} /></div>
             <span className="font-medium text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">Settings</span>
           </button>
@@ -169,6 +191,10 @@ function App() {
           <button onClick={() => invoke('plugin:window|maximize')} className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-400 cursor-pointer ml-2" />
         </div>
 
+        <div className="absolute top-8 left-0 w-full z-30">
+          <TabBar />
+        </div>
+
         <AnimatePresence mode="wait">
           <motion.div
             key={activeApp}
@@ -176,7 +202,7 @@ function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.99 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="w-full h-full absolute inset-0 pt-8"
+            className="w-full h-full absolute inset-0 pt-[68px]"
           >
             <ErrorBoundary>
               <Suspense fallback={
@@ -191,7 +217,14 @@ function App() {
           </motion.div>
         </AnimatePresence>
       </main>
+      <KeyboardHelp />
       <ToastContainer />
+      {showOnboarding && (
+        <OnboardingWizard onComplete={() => {
+          localStorage.setItem('vaultly-onboarded', 'true');
+          setShowOnboarding(false);
+        }} />
+      )}
     </div>
   );
 }

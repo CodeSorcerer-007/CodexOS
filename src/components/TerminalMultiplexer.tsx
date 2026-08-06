@@ -10,9 +10,12 @@ interface Pane {
   id: string;
 }
 
+import { useStore, useToast } from '../store/store';
+
 export const TerminalMultiplexer = () => {
   const [panes, setPanes] = useState<Pane[]>([{ id: uuidv4() }]);
   const [layout, setLayout] = useState<'1x1' | '1x2' | '2x1' | '2x2'>('1x1');
+  const terminalShell = useStore(s => s.settings.terminalShell);
 
   const splitVertical = () => {
     if (panes.length < 4) {
@@ -34,7 +37,9 @@ export const TerminalMultiplexer = () => {
     if (panes.length === 2) setLayout('1x1');
     else if (panes.length === 3) setLayout('1x2'); // fallback
     
-    invoke('kill_multiplex_pty', { id }).catch(console.error);
+    invoke('kill_multiplex_pty', { id }).catch(e => {
+      useStore.getState().addToast({ type: 'error', title: 'Kill PTY Failed', message: String(e) });
+    });
   };
 
   const gridClass = {
@@ -56,14 +61,15 @@ export const TerminalMultiplexer = () => {
       
       <div className={`flex-1 grid gap-2 ${gridClass}`}>
         {panes.map(pane => (
-          <TerminalPane key={pane.id} id={pane.id} onClose={() => closePane(pane.id)} showClose={panes.length > 1} />
+          <TerminalPane key={pane.id} id={pane.id} onClose={() => closePane(pane.id)} showClose={panes.length > 1} shell={terminalShell} />
         ))}
       </div>
     </div>
   );
 };
 
-const TerminalPane = ({ id, onClose, showClose }: { id: string, onClose: () => void, showClose: boolean }) => {
+const TerminalPane = ({ id, onClose, showClose, shell }: { id: string, onClose: () => void, showClose: boolean, shell: string }) => {
+  const { error: toastError } = useToast();
   const terminalRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
 
@@ -99,11 +105,22 @@ const TerminalPane = ({ id, onClose, showClose }: { id: string, onClose: () => v
 
       // Send input to the specific terminal ID
       term.onData((data) => {
-        invoke('write_multiplex_pty', { id, data }).catch(console.error);
+        invoke('write_multiplex_pty', { id, data }).catch(e => {
+          toastError('Terminal Error', String(e));
+        });
       });
 
       // Start the PTY backend for this ID
-      await invoke('start_multiplex_pty', { id, command: null }).catch(console.error);
+      let command = shell;
+      if (shell === 'wsl') command = 'wsl.exe';
+      if (shell === 'cmd') command = 'cmd.exe';
+      if (shell === 'powershell') command = 'powershell.exe';
+      
+      try {
+        await invoke('start_multiplex_pty', { id, command });
+      } catch (e: any) {
+        useStore.getState().addToast({ type: 'error', title: 'Start PTY Failed', message: String(e) });
+      }
     };
 
     init();
@@ -114,10 +131,12 @@ const TerminalPane = ({ id, onClose, showClose }: { id: string, onClose: () => v
     return () => {
       window.removeEventListener('resize', handleResize);
       if (unlisten) unlisten();
-      invoke('kill_multiplex_pty', { id }).catch(console.error);
+      invoke('kill_multiplex_pty', { id }).catch(e => {
+        toastError('Terminal Error', String(e));
+      });
       term.dispose();
     };
-  }, [id]);
+  }, [id, shell]);
 
   return (
     <div className="relative border border-white/10 rounded overflow-hidden bg-black flex flex-col group">

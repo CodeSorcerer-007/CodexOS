@@ -28,6 +28,6 @@ pub fn run_wasm_plugin(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn run_wasi_nano_vm(path: String, mounted_dir: String) -> Result<String, String> {
-    Ok(format!("WASI Nano-VM successfully executed and terminated: {}", path))
+pub fn run_wasi_nano_vm(_path: String, _mounted_dir: String) -> Result<String, String> {
+    Err("WASI Nano-VM is not yet implemented. Full WASI runtime support is planned for a future release.".to_string())
 }

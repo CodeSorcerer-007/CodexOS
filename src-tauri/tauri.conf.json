@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Vaultly",
-  "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "version": "2.0.0",
+  "identifier": "com.vaultly.app",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",

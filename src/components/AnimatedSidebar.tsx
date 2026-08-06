@@ -16,7 +16,7 @@ export const AnimatedSidebar = ({ onOpenPurger, onNavigate }: { onOpenPurger: ()
   useEffect(() => {
     invoke<string[]>('list_wsl_distros')
       .then(setWslDistros)
-      .catch(console.error);
+      .catch(e => console.warn("Failed to list WSL distros:", e));
   }, []);
 
   return (

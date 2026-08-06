@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useToast } from '../store/store';
@@ -45,9 +45,32 @@ export const DockerDashboard = () => {
   const logsEndRef = useRef<HTMLDivElement>(null);
   
   const [pullImageName, setPullImageName] = useState('');
+  const [confirmTarget, setConfirmTarget] = useState<{ type: 'container' | 'image'; id: string; name: string } | null>(null);
   const { success: toastSuccess, error: toastError } = useToast();
 
-  const fetchContainers = async () => {
+  const fetchStats = useCallback(async (id: string) => {
+    try {
+      const stats = await invoke<ContainerStats>('get_container_stats', { containerId: id });
+      setContainerStats(stats);
+    } catch (e: any) {
+      setContainerStats(null);
+      toastError('Stats Error', String(e));
+    }
+  }, [toastError]);
+  
+  const fetchEnv = useCallback(async (id: string) => {
+     try {
+        const inspectJson = await invoke<string>('docker_inspect', { containerId: id });
+        const inspectObj = JSON.parse(inspectJson);
+        const env = inspectObj[0]?.Config?.Env || [];
+        setContainerEnv(env);
+     } catch (e: any) {
+        setContainerEnv([]);
+        toastError('Env Fetch Error', String(e));
+     }
+  }, [toastError]);
+
+  const fetchContainers = useCallback(async () => {
     try {
       const result = await invoke<DockerContainer[]>('get_docker_containers');
       setContainers(result);
@@ -59,9 +82,9 @@ export const DockerDashboard = () => {
       console.error(e);
       toastError('Failed to fetch containers', String(e));
     }
-  };
+  }, [selectedContainer, toastError]);
 
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     try {
       const result = await invoke<DockerImage[]>('get_docker_images');
       setImages(result);
@@ -69,13 +92,13 @@ export const DockerDashboard = () => {
       console.error(e);
       toastError('Failed to fetch images', String(e));
     }
-  };
+  }, [toastError]);
 
-  const initialLoad = async () => {
+  const initialLoad = useCallback(async () => {
     setLoading(true);
     await Promise.all([fetchContainers(), fetchImages()]);
     setLoading(false);
-  };
+  }, [fetchContainers, fetchImages]);
 
   useEffect(() => {
     initialLoad();
@@ -89,7 +112,7 @@ export const DockerDashboard = () => {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [activeTab, selectedContainer]);
+  }, [activeTab, selectedContainer, initialLoad, fetchContainers, fetchImages, fetchStats]);
   
   useEffect(() => {
      if (selectedContainer) {
@@ -98,31 +121,11 @@ export const DockerDashboard = () => {
         setLogs([]);
         setIsStreaming(false);
      }
-  }, [selectedContainer?.id]);
+  }, [selectedContainer, fetchStats, fetchEnv]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
-
-  const fetchStats = async (id: string) => {
-    try {
-      const stats = await invoke<ContainerStats>('get_container_stats', { containerId: id });
-      setContainerStats(stats);
-    } catch (e) {
-      setContainerStats(null);
-    }
-  };
-  
-  const fetchEnv = async (id: string) => {
-     try {
-        const inspectJson = await invoke<string>('docker_inspect', { containerId: id });
-        const inspectObj = JSON.parse(inspectJson);
-        const env = inspectObj[0]?.Config?.Env || [];
-        setContainerEnv(env);
-     } catch(e) {
-        setContainerEnv([]);
-     }
-  };
 
   const handleAction = async (containerId: string, action: string) => {
     try {
@@ -154,7 +157,7 @@ export const DockerDashboard = () => {
       }).then(fn => { unlisten = fn; });
       return () => { if (unlisten) unlisten(); };
     }
-  }, [selectedContainer?.id, isStreaming]);
+  }, [selectedContainer, isStreaming]);
 
   const handlePullImage = async () => {
     if (!pullImageName) return;
@@ -273,9 +276,7 @@ export const DockerDashboard = () => {
                          </>
                        )}
                        <button 
-                         onClick={() => {
-                           if (confirm(`Remove container ${selectedContainer.name}?`)) handleAction(selectedContainer.id, 'rm');
-                         }} 
+                         onClick={() => setConfirmTarget({ type: 'container', id: selectedContainer.id, name: selectedContainer.name })} 
                          className="px-3 py-1.5 bg-red-500/20 text-red-400 border border-red-500/50 rounded hover:bg-red-500/30 text-sm font-bold transition-colors"
                        >
                          Remove
@@ -373,9 +374,7 @@ export const DockerDashboard = () => {
                  <div key={image.id} className="bg-black/30 border border-white/5 rounded-lg p-4 flex flex-col gap-3 group hover:border-white/20 transition-colors">
                     <div className="flex justify-between items-start">
                        <span className="font-bold text-white truncate mr-2" title={image.repository}>{image.repository}</span>
-                       <button onClick={() => {
-                          if (confirm(`Remove image ${image.repository}:${image.tag}?`)) handleRemoveImage(image.id);
-                       }} className="text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                       <button onClick={() => setConfirmTarget({ type: 'image', id: image.id, name: `${image.repository}:${image.tag}` })} className="text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
                        </button>
                     </div>
@@ -389,6 +388,38 @@ export const DockerDashboard = () => {
                  </div>
               ))}
            </div>
+        </div>
+      )}
+
+      {confirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-panel border border-white/10 rounded-xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <h3 className="text-xl font-bold text-white">Confirm Deletion</h3>
+            <p className="text-gray-300 text-sm">
+              Are you sure you want to remove {confirmTarget.type} <span className="font-mono text-cyan-400 font-bold">{confirmTarget.name}</span>?
+            </p>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => setConfirmTarget(null)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (confirmTarget.type === 'container') {
+                    handleAction(confirmTarget.id, 'rm');
+                  } else {
+                    handleRemoveImage(confirmTarget.id);
+                  }
+                  setConfirmTarget(null);
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-sm transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

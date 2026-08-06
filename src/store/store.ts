@@ -11,7 +11,16 @@ export interface Toast {
   duration?: number; // ms, 0 = never auto-dismiss
 }
 
+export interface AppTab {
+  id: string;
+  activeApp: Tab['activeApp'];
+  currentPath: string | null;
+  selectedFile: string | null;
+}
+
 export interface DashboardState {
+  tabs: AppTab[];
+  activeTabId: string;
   activeApp: Tab['activeApp'];
   currentPath: string | null;
   selectedFile: string | null;
@@ -22,6 +31,10 @@ export interface DashboardState {
   historyIndex: number;
   canGoBack: boolean;
   canGoForward: boolean;
+  isVaultLocked: boolean;
+  setVaultLocked: (locked: boolean) => void;
+  secretsCount: number;
+  setSecretsCount: (count: number) => void;
 
   // Git State
   gitRepoPath: string | null;
@@ -31,9 +44,6 @@ export interface DashboardState {
 
   // Active Tunnels Badge
   activeTunnelCount: number;
-
-  // Active Secrets Badge
-  secretsCount: number;
 
   // Settings State
   settings: {
@@ -47,6 +57,12 @@ export interface DashboardState {
   sshConnections: string[];
 
   // Actions
+  addTab: () => void;
+  closeTab: (id: string) => void;
+  setActiveTab: (id: string) => void;
+  updateActiveTab: (changes: Partial<AppTab>) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
+  
   setActiveApp: (app: Tab['activeApp']) => void;
   setCurrentPath: (path: string | null) => void;
   setSelectedFile: (file: string | null) => void;
@@ -58,7 +74,6 @@ export interface DashboardState {
   setGitRepoPath: (path: string | null) => void;
   setPeerCount: (count: number) => void;
   setActiveTunnelCount: (count: number) => void;
-  setSecretsCount: (count: number) => void;
   updateSettings: (partial: Partial<DashboardState['settings']>) => void;
   addSshConnection: (connection: string) => void;
 }
@@ -80,7 +95,9 @@ const getSavedSettings = () => {
   };
 };
 
-export const useStore = create<DashboardState>((set) => ({
+export const useStore = create<DashboardState>((set, get) => ({
+  tabs: [{ id: 'tab-1', activeApp: 'home', currentPath: null, selectedFile: null }],
+  activeTabId: 'tab-1',
   activeApp: 'home',
   currentPath: null,
   selectedFile: null,
@@ -90,23 +107,83 @@ export const useStore = create<DashboardState>((set) => ({
   historyIndex: -1,
   canGoBack: false,
   canGoForward: false,
+  isVaultLocked: true,
+  setVaultLocked: (locked) => set({ isVaultLocked: locked }),
+  secretsCount: 0,
+  setSecretsCount: (count) => set({ secretsCount: count }),
 
   gitRepoPath: null,
   peerCount: 0,
   activeTunnelCount: 0,
-  secretsCount: 0,
 
   settings: getSavedSettings(),
   sshConnections: [],
 
-  setActiveApp: (app) => set({ activeApp: app }),
+  addTab: () => set((state) => {
+    if (state.tabs.length >= 8) return state;
+    const newTab: AppTab = {
+      id: `tab-${Date.now()}`,
+      activeApp: 'home',
+      currentPath: null,
+      selectedFile: null,
+    };
+    return { tabs: [...state.tabs, newTab], activeTabId: newTab.id, activeApp: 'home', currentPath: null, selectedFile: null };
+  }),
+
+  closeTab: (id) => set((state) => {
+    if (state.tabs.length === 1) return state; // can't close last tab
+    const newTabs = state.tabs.filter(t => t.id !== id);
+    const newActiveId = state.activeTabId === id
+      ? newTabs[newTabs.length - 1].id
+      : state.activeTabId;
+    const activeTab = newTabs.find(t => t.id === newActiveId)!;
+    return { 
+      tabs: newTabs, 
+      activeTabId: newActiveId,
+      activeApp: activeTab.activeApp,
+      currentPath: activeTab.currentPath,
+      selectedFile: activeTab.selectedFile
+    };
+  }),
+
+  setActiveTab: (id) => set((state) => {
+    const tab = state.tabs.find(t => t.id === id);
+    if (!tab) return state;
+    return {
+      activeTabId: id,
+      activeApp: tab.activeApp,
+      currentPath: tab.currentPath,
+      selectedFile: tab.selectedFile
+    };
+  }),
+
+  updateActiveTab: (changes) => set((state) => {
+    const tabs = state.tabs.map(t => t.id === state.activeTabId ? { ...t, ...changes } : t);
+    const tab = tabs.find(t => t.id === state.activeTabId)!;
+    return {
+      tabs,
+      activeApp: tab.activeApp,
+      currentPath: tab.currentPath,
+      selectedFile: tab.selectedFile
+    };
+  }),
+
+  reorderTabs: (from, to) => set((state) => {
+    const tabs = [...state.tabs];
+    const [removed] = tabs.splice(from, 1);
+    tabs.splice(to, 0, removed);
+    return { tabs };
+  }),
+
+  setActiveApp: (app) => get().updateActiveTab({ activeApp: app }),
   
   setCurrentPath: (path) => {
     if (path === null) return;
-    useStore.getState().pushPath(path);
+    get().pushPath(path);
+    get().updateActiveTab({ currentPath: path });
   },
 
-  setSelectedFile: (file) => set({ selectedFile: file }),
+  setSelectedFile: (file) => get().updateActiveTab({ selectedFile: file }),
   addToast: (toast) => set((state) => ({
     toasts: [
       ...state.toasts.slice(-3), // keep last 3, add new = max 4
@@ -153,7 +230,6 @@ export const useStore = create<DashboardState>((set) => ({
   setGitRepoPath: (path) => set({ gitRepoPath: path }),
   setPeerCount: (count) => set({ peerCount: count }),
   setActiveTunnelCount: (count) => set({ activeTunnelCount: count }),
-  setSecretsCount: (count) => set({ secretsCount: count }),
   
   updateSettings: (partial) => set((state) => ({
     settings: { ...state.settings, ...partial }

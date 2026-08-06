@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import { useToast } from '../store/store';
 
 const springPhysics = {
   type: "spring" as const,
@@ -9,6 +10,7 @@ const springPhysics = {
 
 export const FABMenu = ({ onOpenMetrics, onSpawnServer, onOpenRenamer, onOpenTreeMap, onOpenEnvVars, onOpenServices, onOpenHosts, onOpenDuplicates, onOpenTerminal, onOpenVault }: { onOpenMetrics: () => void, onSpawnServer?: () => void, onOpenRenamer?: () => void, onOpenTreeMap?: () => void, onOpenEnvVars?: () => void, onOpenServices?: () => void, onOpenHosts?: () => void, onOpenDuplicates?: () => void, onOpenTerminal?: () => void, onOpenVault?: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { info: toastInfo } = useToast();
 
   return (
     <div className="absolute bottom-8 right-8 z-50 flex flex-col-reverse items-end gap-4">
@@ -39,8 +41,8 @@ export const FABMenu = ({ onOpenMetrics, onSpawnServer, onOpenRenamer, onOpenTre
             <ActionItem label="Project Metrics" onClick={onOpenMetrics} onClose={() => setIsOpen(false)} />
             <ActionItem label="New Terminal" onClick={onOpenTerminal} onClose={() => setIsOpen(false)} />
             <ActionItem label="AES-256 Vault" onClick={onOpenVault} onClose={() => setIsOpen(false)} />
-            <ActionItem label="New Workspace" onClick={() => alert("Multi-workspace support arriving in v1.1")} onClose={() => setIsOpen(false)} />
-            <ActionItem label="Clone Repo" onClick={() => alert("Git integration arriving in v1.1")} onClose={() => setIsOpen(false)} />
+            <ActionItem label="New Workspace" onClick={() => toastInfo("Multi-Workspace", "Arriving in v1.1")} onClose={() => setIsOpen(false)} />
+            <ActionItem label="Clone Repo" onClick={() => toastInfo("Git Integration", "Arriving in v1.1")} onClose={() => setIsOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>

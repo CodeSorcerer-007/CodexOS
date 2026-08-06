@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { useState, useEffect } from 'react';
+import { useStore } from '../store/store';
 
 interface CodeMetrics {
   total_files: number;
@@ -22,7 +23,7 @@ const colorMap: Record<string, string> = {
   'rs': '#dea584',
   'css': '#264de4',
   'html': '#e34f26',
-  'json': '#000000',
+  'json': '#f59e0b',
   'toml': '#9c4221',
 };
 
@@ -31,11 +32,23 @@ export const CodeMetricsOverlay = ({ isOpen, onClose, currentPath }: CodeMetrics
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
     if (isOpen && currentPath) {
       setLoading(true);
       invoke<CodeMetrics>('get_code_metrics', { path: currentPath })
         .then(res => setMetrics(res))
-        .catch(console.error)
+        .catch(e => {
+          console.error(e);
+          useStore.getState().addToast({ type: 'error', title: 'Metrics Scan Failed', message: String(e) });
+        })
         .finally(() => setLoading(false));
     }
   }, [isOpen, currentPath]);
