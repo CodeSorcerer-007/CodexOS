@@ -1,11 +1,6 @@
-// Usage: const { success, error } = useToast();
-// success('File saved!');
-// error('Operation failed', err.message);
-
 import { create } from 'zustand';
 import type { Tab } from '../App';
 
-<<<<<<< HEAD
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
 export interface Toast {
@@ -16,21 +11,11 @@ export interface Toast {
   duration?: number; // ms, 0 = never auto-dismiss
 }
 
-interface DashboardState {
-  activeApp: Tab['activeApp'];
-  currentPath: string | null;
-  selectedFile: string | null;
-  toasts: Toast[];
-  setActiveApp: (app: Tab['activeApp']) => void;
-  setCurrentPath: (path: string | null) => void;
-  setSelectedFile: (file: string | null) => void;
-  addToast: (toast: Omit<Toast, 'id'>) => void;
-  removeToast: (id: string) => void;
-=======
 export interface DashboardState {
   activeApp: Tab['activeApp'];
   currentPath: string | null;
   selectedFile: string | null;
+  toasts: Toast[];
   
   // Navigation State
   pathHistory: string[];
@@ -62,6 +47,8 @@ export interface DashboardState {
   setActiveApp: (app: Tab['activeApp']) => void;
   setCurrentPath: (path: string | null) => void;
   setSelectedFile: (file: string | null) => void;
+  addToast: (toast: Omit<Toast, 'id'>) => void;
+  removeToast: (id: string) => void;
   pushPath: (path: string) => void;
   goBack: () => void;
   goForward: () => void;
@@ -70,7 +57,6 @@ export interface DashboardState {
   setSecretsCount: (count: number) => void;
   updateSettings: (partial: Partial<DashboardState['settings']>) => void;
   addSshConnection: (connection: string) => void;
->>>>>>> subagent-Store-Expander-self-2c4706bf
 }
 
 const getSavedSettings = () => {
@@ -94,9 +80,7 @@ export const useStore = create<DashboardState>((set) => ({
   activeApp: 'home',
   currentPath: null,
   selectedFile: null,
-<<<<<<< HEAD
   toasts: [],
-=======
   
   pathHistory: [],
   historyIndex: -1,
@@ -110,7 +94,6 @@ export const useStore = create<DashboardState>((set) => ({
   settings: getSavedSettings(),
   sshConnections: [],
 
->>>>>>> subagent-Store-Expander-self-2c4706bf
   setActiveApp: (app) => set({ activeApp: app }),
   
   setCurrentPath: (path) => {
@@ -119,7 +102,6 @@ export const useStore = create<DashboardState>((set) => ({
   },
 
   setSelectedFile: (file) => set({ selectedFile: file }),
-<<<<<<< HEAD
   addToast: (toast) => set((state) => ({
     toasts: [
       ...state.toasts.slice(-3), // keep last 3, add new = max 4
@@ -129,18 +111,6 @@ export const useStore = create<DashboardState>((set) => ({
   removeToast: (id) => set((state) => ({
     toasts: state.toasts.filter((t) => t.id !== id)
   })),
-}));
-
-export const useToast = () => {
-  const addToast = useStore((s) => s.addToast);
-  return {
-    success: (title: string, message?: string) => addToast({ type: 'success', title, message, duration: 4000 }),
-    error: (title: string, message?: string) => addToast({ type: 'error', title, message, duration: 6000 }),
-    warning: (title: string, message?: string) => addToast({ type: 'warning', title, message, duration: 5000 }),
-    info: (title: string, message?: string) => addToast({ type: 'info', title, message, duration: 4000 }),
-  };
-};
-=======
 
   pushPath: (path) => set((state) => {
     const newHistory = [...state.pathHistory.slice(0, state.historyIndex + 1), path];
@@ -188,7 +158,16 @@ export const useToast = () => {
   })),
 }));
 
+export const useToast = () => {
+  const addToast = useStore((s) => s.addToast);
+  return {
+    success: (title: string, message?: string) => addToast({ type: 'success', title, message, duration: 4000 }),
+    error: (title: string, message?: string) => addToast({ type: 'error', title, message, duration: 6000 }),
+    warning: (title: string, message?: string) => addToast({ type: 'warning', title, message, duration: 5000 }),
+    info: (title: string, message?: string) => addToast({ type: 'info', title, message, duration: 4000 }),
+  };
+};
+
 useStore.subscribe((state) => {
   localStorage.setItem('vaultly-settings', JSON.stringify(state.settings));
 });
->>>>>>> subagent-Store-Expander-self-2c4706bf
