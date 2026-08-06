@@ -1,104 +1,95 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+
+interface GpuInfo {
+  name: string;
+  adapter_ram: string;
+  driver_version: string;
+  video_processor: string;
+}
 
 export const GPUCluster = () => {
-  const [isComputing, setIsComputing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [logs, setLogs] = useState<string[]>([]);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [gpus, setGpus] = useState<GpuInfo[]>([]);
+  const [utilization, setUtilization] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const startCompute = () => {
-    setIsComputing(true);
-    setProgress(0);
-    setLogs(['Initializing distributed WebGL compute context...']);
+  useEffect(() => {
+    invoke<GpuInfo[]>('get_gpu_info')
+      .then(setGpus)
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
     
-    // Simulate chunking workload to peers
-    setLogs(prev => [...prev, 'Splitting 4GB matrix into 64MB chunks...']);
-    setLogs(prev => [...prev, 'Broadcasting chunks to peers [peer-a1b2, peer-c3d4, peer-e5f6]...']);
-
-    // Simple WebGL setup for visual feedback
-    const canvas = canvasRef.current;
-    if (canvas) {
-      const gl = canvas.getContext('webgl');
-      if (gl) {
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-        
-        // Very basic visual trick to simulate GPU working
-        let step = 0;
-        const computeInterval = setInterval(() => {
-          step += 1;
-          const p = Math.min((step / 50) * 100, 100);
-          setProgress(p);
-          
-          if (step % 10 === 0) {
-            setLogs(prev => [...prev, `Received completed chunk from peer-${Math.random().toString(36).substring(7)}`]);
-          }
-
-          // Random colored squares to look like parallel processing
-          for(let i=0; i<100; i++) {
-            const x = Math.random() * canvas.width;
-            const y = Math.random() * canvas.height;
-            gl.enable(gl.SCISSOR_TEST);
-            gl.scissor(x, y, 10, 10);
-            gl.clearColor(Math.random(), 1.0, Math.random(), 1.0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-          }
-
-          if (step >= 50) {
-            clearInterval(computeInterval);
-            setIsComputing(false);
-            setLogs(prev => [...prev, 'All chunks merged. Matrix multiplication complete.']);
-          }
-        }, 100);
-      }
-    }
-  };
+    const poll = setInterval(async () => {
+      try {
+        const util = await invoke<number>('get_gpu_utilization');
+        setUtilization(util);
+      } catch {}
+    }, 2000);
+    
+    return () => clearInterval(poll);
+  }, []);
 
   return (
     <div className="flex flex-col h-full w-full bg-[#0a0f18] text-white p-6 gap-6">
       <div className="flex justify-between items-center border-b border-white/10 pb-4">
         <div>
-          <h2 className="font-bold text-cyan-400 text-2xl mb-1">Distributed GPU Compute</h2>
-          <p className="text-sm text-gray-400">Pool local network GPU resources (WebGPU/WebGL) for massively parallel tasks.</p>
+          <h2 className="font-bold text-cyan-400 text-2xl mb-1">GPU Compute Cluster</h2>
+          <p className="text-sm text-gray-400">Live GPU metrics and utilization across the system.</p>
         </div>
-        <button 
-          onClick={startCompute}
-          disabled={isComputing}
-          className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold rounded shadow-[0_0_15px_rgba(8,145,178,0.3)] transition-colors"
-        >
-          {isComputing ? 'Computing...' : 'Start 4GB Matrix Multiply'}
-        </button>
       </div>
 
-      <div className="flex gap-6 flex-1 overflow-hidden">
-        <div className="w-1/2 flex flex-col gap-2">
-          <h3 className="font-bold text-xs uppercase tracking-widest text-cyan-500">Live Compute Shader</h3>
-          <div className="flex-1 bg-black rounded-lg border border-white/10 p-2 relative">
-            <canvas 
-              ref={canvasRef} 
-              width={500} 
-              height={300} 
-              className="w-full h-full rounded"
-            />
-            {isComputing && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="text-4xl font-black text-cyan-400 drop-shadow-[0_0_10px_rgba(0,0,0,1)]">
-                  {Math.floor(progress)}%
+      <div className="flex-1 overflow-auto">
+        {loading ? (
+          <div className="flex items-center justify-center h-full text-cyan-500">
+            Scanning for GPUs...
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full text-red-500">
+            Error loading GPUs: {error}
+          </div>
+        ) : gpus.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-gray-400">
+            No GPUs detected.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {gpus.map((gpu, i) => (
+              <div key={i} className="bg-black/50 border border-white/10 rounded-lg p-6 flex flex-col gap-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-bold text-lg text-white mb-1">{gpu.name}</h3>
+                    <p className="text-xs text-cyan-500 font-mono">{gpu.video_processor}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-gray-300">VRAM</div>
+                    <div className="text-lg text-cyan-400">{gpu.adapter_ram}</div>
+                  </div>
+                </div>
+                
+                <div className="flex gap-4 border-t border-white/5 pt-4">
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-500 mb-1">Driver Version</div>
+                    <div className="text-sm text-gray-300 font-mono">{gpu.driver_version}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-gray-400 font-bold">Utilization</span>
+                    <span className="text-sm text-cyan-400 font-bold">{utilization}%</span>
+                  </div>
+                  <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden border border-white/5">
+                    <div 
+                      className="bg-cyan-500 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_10px_rgba(6,182,212,0.6)]"
+                      style={{ width: `${utilization}%` }}
+                    />
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
-
-        <div className="w-1/2 flex flex-col gap-2">
-          <h3 className="font-bold text-xs uppercase tracking-widest text-cyan-500">P2P Mesh Network Logs</h3>
-          <div className="flex-1 bg-black rounded-lg border border-white/10 p-4 font-mono text-xs text-cyan-300 overflow-y-auto flex flex-col gap-2">
-            {logs.map((log, i) => (
-              <div key={i}>&gt; {log}</div>
             ))}
-            {logs.length === 0 && <div className="text-gray-600">Waiting to initialize cluster...</div>}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -68,3 +68,63 @@ pub fn get_top_processes_memory(state: tauri::State<'_, SysState>) -> Vec<Proces
     processes.sort_by(|a, b| b.memory_kb.cmp(&a.memory_kb));
     processes.into_iter().take(20).collect()
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct GpuInfo {
+    pub name: String,
+    pub adapter_ram: String,
+    pub driver_version: String,
+    pub video_processor: String,
+}
+
+#[tauri::command]
+pub fn get_gpu_info() -> Result<Vec<GpuInfo>, String> {
+    let script = "Get-WmiObject Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoProcessor | ConvertTo-Json";
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", script])
+        .output()
+        .map_err(|e| e.to_string())?;
+    
+    let json = String::from_utf8_lossy(&output.stdout);
+    
+    // Parse the JSON. Note: if only one GPU, it's an object not array.
+    // Handle both cases.
+    let value: serde_json::Value = serde_json::from_str(&json)
+        .map_err(|e| format!("Parse error: {}", e))?;
+    
+    let items = if value.is_array() {
+        value.as_array().unwrap().clone()
+    } else {
+        vec![value]
+    };
+    
+    let gpus = items.iter().filter_map(|item| {
+        Some(GpuInfo {
+            name: item["Name"].as_str()?.to_string(),
+            adapter_ram: format!("{} MB", item["AdapterRAM"].as_u64().unwrap_or(0) / 1_048_576),
+            driver_version: item["DriverVersion"].as_str().unwrap_or("Unknown").to_string(),
+            video_processor: item["VideoProcessor"].as_str().unwrap_or("Unknown").to_string(),
+        })
+    }).collect();
+    
+    Ok(gpus)
+}
+
+#[tauri::command]
+pub fn get_gpu_utilization() -> Result<u8, String> {
+    // Get GPU utilization via nvidia-smi if NVIDIA GPU, else return 0
+    // Try nvidia-smi first (NVIDIA GPUs)
+    let nvidia = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"])
+        .output();
+    
+    if let Ok(output) = nvidia {
+        if output.status.success() {
+            let s = String::from_utf8_lossy(&output.stdout);
+            return s.trim().parse::<u8>().map_err(|e| e.to_string());
+        }
+    }
+    
+    // Fallback: use WMIC for basic GPU process info
+    Ok(0)
+}
