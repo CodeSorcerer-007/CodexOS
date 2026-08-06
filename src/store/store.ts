@@ -26,6 +26,9 @@ export interface DashboardState {
   // Git State
   gitRepoPath: string | null;
 
+  // Peer Count
+  peerCount: number;
+
   // Active Tunnels Badge
   activeTunnelCount: number;
 
@@ -53,6 +56,7 @@ export interface DashboardState {
   goBack: () => void;
   goForward: () => void;
   setGitRepoPath: (path: string | null) => void;
+  setPeerCount: (count: number) => void;
   setActiveTunnelCount: (count: number) => void;
   setSecretsCount: (count: number) => void;
   updateSettings: (partial: Partial<DashboardState['settings']>) => void;
@@ -88,6 +92,7 @@ export const useStore = create<DashboardState>((set) => ({
   canGoForward: false,
 
   gitRepoPath: null,
+  peerCount: 0,
   activeTunnelCount: 0,
   secretsCount: 0,
 
@@ -146,6 +151,7 @@ export const useStore = create<DashboardState>((set) => ({
   }),
 
   setGitRepoPath: (path) => set({ gitRepoPath: path }),
+  setPeerCount: (count) => set({ peerCount: count }),
   setActiveTunnelCount: (count) => set({ activeTunnelCount: count }),
   setSecretsCount: (count) => set({ secretsCount: count }),
   

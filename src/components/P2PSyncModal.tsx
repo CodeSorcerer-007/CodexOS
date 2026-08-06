@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Peer, { DataConnection } from 'peerjs';
 import { invoke } from '@tauri-apps/api/core';
+import { useStore } from '../store/store';
 
 interface P2PSyncModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export const P2PSyncModal = ({ isOpen, onClose, currentPath }: P2PSyncModalProps
   const [connection, setConnection] = useState<DataConnection | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const peerRef = useRef<Peer | null>(null);
+  const setPeerCount = useStore(s => s.setPeerCount);
 
   const addLog = (msg: string) => setLogs(prev => [...prev, msg]);
 
@@ -40,6 +42,7 @@ export const P2PSyncModal = ({ isOpen, onClose, currentPath }: P2PSyncModalProps
         peerRef.current.destroy();
         peerRef.current = null;
         setConnection(null);
+        setPeerCount(0);
         setPeerId('');
         setLogs([]);
       }
@@ -49,6 +52,7 @@ export const P2PSyncModal = ({ isOpen, onClose, currentPath }: P2PSyncModalProps
   const setupConnection = (conn: DataConnection) => {
     conn.on('open', () => {
       setConnection(conn);
+      setPeerCount(1);
       addLog(`Secure connection established!`);
     });
 
@@ -74,6 +78,7 @@ export const P2PSyncModal = ({ isOpen, onClose, currentPath }: P2PSyncModalProps
     conn.on('close', () => {
       addLog('Connection closed.');
       setConnection(null);
+      setPeerCount(0);
     });
   };
 
