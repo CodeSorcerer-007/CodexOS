@@ -36,7 +36,11 @@ export const FileGrid = ({
   onHashVerify,
   onFormatConvert,
   onAddToShelf,
-  onOptimizeAsset
+  onOptimizeAsset,
+  onBack,
+  onForward,
+  canGoBack,
+  canGoForward
 }: { 
   currentPath: string; 
   onNavigate: (path: string) => void;
@@ -46,6 +50,10 @@ export const FileGrid = ({
   onFormatConvert?: (path: string, targetFormat: string) => void;
   onAddToShelf?: (path: string) => void;
   onOptimizeAsset?: (path: string) => void;
+  onBack?: () => void;
+  onForward?: () => void;
+  canGoBack?: boolean;
+  canGoForward?: boolean;
 }) => {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [gitStatus, setGitStatus] = useState<Record<string, string>>({});
@@ -101,19 +109,37 @@ export const FileGrid = ({
   return (
     <div className="flex flex-col gap-4 h-full">
       {/* Toolbar */}
-      <div className="flex justify-end gap-2 px-2">
-        <button 
-          onClick={() => setViewMode('grid')}
-          className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'grid' ? 'bg-cyan/20 text-cyan border border-cyan/50' : 'bg-white/5 text-gray-400 hover:text-white'}`}
-        >
-          Grid
-        </button>
-        <button 
-          onClick={() => setViewMode('list')}
-          className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'list' ? 'bg-cyan/20 text-cyan border border-cyan/50' : 'bg-white/5 text-gray-400 hover:text-white'}`}
-        >
-          List (Dual Pane)
-        </button>
+      <div className="flex justify-between items-center px-2">
+        <div className="flex gap-2">
+          <button 
+            onClick={onBack} 
+            disabled={!canGoBack}
+            className={`px-3 py-1 text-sm rounded-md transition-colors ${canGoBack ? 'bg-cyan/20 text-cyan border border-cyan/50 hover:bg-cyan/30' : 'bg-white/5 text-gray-600 cursor-not-allowed'}`}
+          >
+            ← Back
+          </button>
+          <button 
+            onClick={onForward} 
+            disabled={!canGoForward}
+            className={`px-3 py-1 text-sm rounded-md transition-colors ${canGoForward ? 'bg-cyan/20 text-cyan border border-cyan/50 hover:bg-cyan/30' : 'bg-white/5 text-gray-600 cursor-not-allowed'}`}
+          >
+            Forward →
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'grid' ? 'bg-cyan/20 text-cyan border border-cyan/50' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+          >
+            Grid
+          </button>
+          <button 
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1 text-sm rounded-md transition-colors ${viewMode === 'list' ? 'bg-cyan/20 text-cyan border border-cyan/50' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+          >
+            List (Dual Pane)
+          </button>
+        </div>
       </div>
 
       <motion.div 

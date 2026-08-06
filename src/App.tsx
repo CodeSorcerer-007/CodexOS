@@ -69,12 +69,16 @@ function App() {
   const setCurrentPath = useStore(state => state.setCurrentPath);
   const selectedFile = useStore(state => state.selectedFile);
   const setSelectedFile = useStore(state => state.setSelectedFile);
+  const canGoBack = useStore(state => state.canGoBack);
+  const canGoForward = useStore(state => state.canGoForward);
+  const goBack = useStore(state => state.goBack);
+  const goForward = useStore(state => state.goForward);
 
   // Simple render map for animations
   const renderApp = () => {
     switch(activeApp) {
       case 'home': return <VaultlyDashboard onOpenApp={setActiveApp} />;
-      case 'files': return <FileGrid currentPath={currentPath || ""} onNavigate={setCurrentPath} selectedFile={selectedFile} onSelect={setSelectedFile} />;
+      case 'files': return <FileGrid currentPath={currentPath || ""} onNavigate={setCurrentPath} selectedFile={selectedFile} onSelect={setSelectedFile} onBack={goBack} onForward={goForward} canGoBack={canGoBack} canGoForward={canGoForward} />;
       case 'docker': return <DockerDashboard />;
       case 'network': return <NetworkInterceptor />;
       case 'database': return <DatabaseStudio />;
