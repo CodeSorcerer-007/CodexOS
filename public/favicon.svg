@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Black background -->
+  <rect width="100" height="100" fill="#000000"/>
+
+  <!-- Yellow hexagonal C shape -->
+  <!-- Outer hexagon-like C path -->
+  <path d="
+    M 55 10
+    L 78 23
+    L 78 33
+    L 68 33
+    L 68 26
+    L 55 19
+    L 35 19
+    L 22 30
+    L 22 70
+    L 35 81
+    L 55 81
+    L 68 74
+    L 68 67
+    L 78 67
+    L 78 77
+    L 55 90
+    L 28 90
+    L 12 77
+    L 12 23
+    L 28 10
+    Z
+  " fill="#F5BC00"/>
+
+  <!-- Inner cutout to create the C opening on the right -->
+  <path d="
+    M 55 28
+    L 35 28
+    L 26 35
+    L 26 65
+    L 35 72
+    L 55 72
+    L 64 66
+    L 64 58
+    L 55 58
+    L 50 62
+    L 38 62
+    L 33 57
+    L 33 43
+    L 38 38
+    L 50 38
+    L 55 42
+    L 64 42
+    L 64 34
+    Z
+  " fill="#000000"/>
+
+  <!-- Terminal prompt: > _ -->
+  <!-- Chevron > -->
+  <polyline points="56,44 63,50 56,56" stroke="#F5BC00" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Underscore/dash _ -->
+  <line x1="66" y1="56" x2="74" y2="56" stroke="#F5BC00" stroke-width="4" stroke-linecap="round"/>
+</svg>

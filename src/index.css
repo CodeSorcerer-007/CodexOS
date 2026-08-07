@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+@theme {
+  --color-vault-bg: #06080F;
+  --color-vault-card: #0B0F19;
+  --color-vault-border: rgba(255, 255, 255, 0.08);
+  --color-vault-accent: #00E5FF;
+  --color-vault-accent-glow: rgba(0, 229, 255, 0.2);
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-vault-bg);
+  color: #E2E8F0;
+  overflow: hidden;
+}
+
+/* Beautiful Animated Background Mesh Gradient */
+.mesh-gradient {
+  background-color: #06080F;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(14, 25, 45, 1) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(15, 12, 41, 1) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(8, 22, 38, 1) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(10, 10, 20, 1) 0px, transparent 50%);
+  background-attachment: fixed;
+  background-size: cover;
+}
+
+/* Glassmorphism Utilities */
+.liquid-glass {
+  background: rgba(11, 15, 25, 0.4);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--color-vault-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.premium-card {
+  background: rgba(15, 20, 35, 0.5);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+.premium-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.5), 0 0 15px var(--color-vault-accent-glow);
+}
+
+/* Custom Scrollbar for sleekness */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Clean text selection */
+::selection {
+  background: var(--color-vault-accent-glow);
+  color: #fff;
+}
+
+/* Light Theme via CSS Filter Invert Hack */
+.light-theme {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #FFFFFF; /* Inverts to very dark */
+}
+.light-theme img, .light-theme video, .light-theme canvas {
+  filter: invert(1) hue-rotate(180deg); /* Revert media elements */
+}
