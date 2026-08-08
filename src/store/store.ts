@@ -19,6 +19,26 @@ interface AppTab {
   openFiles: string[];
 }
 
+export interface ShortcutItem {
+  id: string;
+  keyCombo: string;
+  label: string;
+  actionType: 'palette' | 'new_tab' | 'close_tab' | 'help' | 'nav_app';
+  targetApp?: Tab['activeApp'];
+}
+
+export const DEFAULT_SHORTCUTS: ShortcutItem[] = [
+  { id: 'sc-1', keyCombo: 'Ctrl+K', label: 'Command Palette', actionType: 'palette' },
+  { id: 'sc-2', keyCombo: 'Ctrl+T', label: 'New Tab', actionType: 'new_tab' },
+  { id: 'sc-3', keyCombo: 'Ctrl+W', label: 'Close Tab', actionType: 'close_tab' },
+  { id: 'sc-4', keyCombo: 'Ctrl+1', label: 'Dashboard', actionType: 'nav_app', targetApp: 'home' },
+  { id: 'sc-5', keyCombo: 'Ctrl+2', label: 'Vaults', actionType: 'nav_app', targetApp: 'files' },
+  { id: 'sc-6', keyCombo: 'Ctrl+3', label: 'Git Client', actionType: 'nav_app', targetApp: 'git' },
+  { id: 'sc-7', keyCombo: 'Ctrl+4', label: 'Terminal', actionType: 'nav_app', targetApp: 'terminal' },
+  { id: 'sc-8', keyCombo: 'Ctrl+,', label: 'Settings', actionType: 'nav_app', targetApp: 'settings' },
+  { id: 'sc-9', keyCombo: 'Ctrl+Shift+?', label: 'Help', actionType: 'help' },
+];
+
 export interface DashboardState {
   tabs: AppTab[];
   activeTabId: string;
@@ -57,6 +77,7 @@ export interface DashboardState {
     aiCopilotEnabled: boolean;
     memorySpikeThresholdMb: number;
     memorySpikeWindowSec: number;
+    customShortcuts: ShortcutItem[];
   };
 
   // SSH Connections
@@ -86,6 +107,10 @@ export interface DashboardState {
   setAiCopilotEnabled: (value: boolean) => void;
   setMemorySpikeThresholdMb: (value: number) => void;
   setMemorySpikeWindowSec: (value: number) => void;
+  addShortcut: (shortcut: Omit<ShortcutItem, 'id'>) => void;
+  updateShortcut: (id: string, shortcut: Partial<ShortcutItem>) => void;
+  deleteShortcut: (id: string) => void;
+  resetShortcuts: () => void;
   addSshConnection: (connection: string) => void;
   openWorkspace: (path: string, name: string) => void;
 }
@@ -100,11 +125,17 @@ const getSavedSettings = () => {
     aiCopilotEnabled: true,
     memorySpikeThresholdMb: 500,
     memorySpikeWindowSec: 10,
+    customShortcuts: DEFAULT_SHORTCUTS,
   };
   const saved = localStorage.getItem('codexos-settings');
   if (saved) {
     try {
-      return { ...defaults, ...JSON.parse(saved) };
+      const parsed = JSON.parse(saved);
+      return { 
+        ...defaults, 
+        ...parsed,
+        customShortcuts: parsed.customShortcuts || DEFAULT_SHORTCUTS 
+      };
     } catch (e) {
       console.error('Failed to parse settings', e);
     }
@@ -276,6 +307,39 @@ export const useStore = create<DashboardState>((set, get) => ({
 
   setMemorySpikeWindowSec: (value) => set((state) => ({
     settings: { ...state.settings, memorySpikeWindowSec: value }
+  })),
+
+  addShortcut: (shortcut) => set((state) => ({
+    settings: {
+      ...state.settings,
+      customShortcuts: [
+        ...state.settings.customShortcuts,
+        { ...shortcut, id: `sc-${Date.now()}` }
+      ]
+    }
+  })),
+
+  updateShortcut: (id, partial) => set((state) => ({
+    settings: {
+      ...state.settings,
+      customShortcuts: state.settings.customShortcuts.map(sc => 
+        sc.id === id ? { ...sc, ...partial } : sc
+      )
+    }
+  })),
+
+  deleteShortcut: (id) => set((state) => ({
+    settings: {
+      ...state.settings,
+      customShortcuts: state.settings.customShortcuts.filter(sc => sc.id !== id)
+    }
+  })),
+
+  resetShortcuts: () => set((state) => ({
+    settings: {
+      ...state.settings,
+      customShortcuts: DEFAULT_SHORTCUTS
+    }
   })),
 
   addSshConnection: (connection) => set((state) => ({

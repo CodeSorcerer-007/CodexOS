@@ -127,25 +127,21 @@ function App() {
   };
 
   return (
-    <div className={`flex h-screen w-screen bg-[#050505] text-white font-sans overflow-hidden selection:bg-indigo-500/30 ${theme === 'light' ? 'light-theme' : ''}`}>
+    <div className={`flex h-screen w-screen bg-[#1a1a1a] text-white font-sans overflow-hidden selection:bg-indigo-500/30 ${theme === 'light' ? 'light-theme' : ''}`}>
       
-      {/* Modern Floating Sidebar */}
-      <nav aria-label="Main navigation" className="w-16 hover:w-64 transition-all duration-300 ease-in-out bg-black/60 backdrop-blur-xl border-r border-white/5 flex flex-col items-center hover:items-start group z-50 absolute h-full top-0 left-0 hover:shadow-2xl hover:shadow-black/50">
+      {/* Fixed Left Navigation Sidebar */}
+      <nav aria-label="Main navigation" className="w-[220px] shrink-0 bg-[#202020] border-r border-[rgba(255,255,255,0.06)] flex flex-col h-full z-50">
         
         {/* Logo Area */}
-        <div className="h-16 w-full flex items-center justify-center group-hover:justify-start group-hover:px-6 mb-4 border-b border-white/5">
-          <img src="/favicon.svg" alt="CodexOS" className="w-8 h-8 shrink-0" />
-          <motion.span 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            className="ml-3 font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500 hidden group-hover:block whitespace-nowrap"
-          >
+        <div className="h-12 w-full flex items-center px-4 mb-2 border-b border-[rgba(255,255,255,0.06)]">
+          <img src="/favicon.svg" alt="CodexOS" className="w-6 h-6 shrink-0" />
+          <span className="ml-3 font-semibold text-[13px] text-[#e0e0e0] whitespace-nowrap tracking-wide">
             CodexOS
-          </motion.span>
+          </span>
         </div>
 
         {/* Scrollable Nav Items */}
-        <div className="flex-1 w-full overflow-y-auto overflow-x-hidden no-scrollbar pb-6 flex flex-col gap-1 px-2 group-hover:px-4">
+        <div className="flex-1 w-full overflow-y-auto no-scrollbar pb-4 flex flex-col gap-0.5 px-3">
           {SIDEBAR_ITEMS.map((item, index) => {
             const isActive = activeApp === item.id;
             return (
@@ -154,24 +150,16 @@ function App() {
                 onClick={() => setActiveApp(item.id as Tab['activeApp'])}
                 aria-label={item.label}
                 aria-current={isActive ? 'page' : undefined}
-                className={`w-full flex items-center h-12 rounded-xl transition-all duration-200 shrink-0 relative
+                className={`w-full flex items-center h-9 rounded px-2 transition-all duration-150 shrink-0 relative
                   ${isActive 
-                    ? 'bg-white/10 text-white' 
-                    : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
+                    ? 'bg-[rgba(255,255,255,0.1)] text-white font-medium' 
+                    : 'text-[#ababab] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#e0e0e0]'
                   }`}
               >
-                {/* Active Indicator Strip */}
-                {isActive && (
-                  <motion.div 
-                    layoutId="activeTabIndicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 rounded-r-full" 
-                  />
-                )}
-                
-                <div className="w-12 h-12 flex items-center justify-center shrink-0">
+                <div className="w-8 h-9 flex items-center justify-center shrink-0 mr-2">
                   {item.icon}
                 </div>
-                <span className="font-medium text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200" title={`${item.label} (Ctrl+${index + 1})`}>
+                <span className="font-normal text-[13px] whitespace-nowrap" title={`${item.label} (Ctrl+${index + 1})`}>
                   {item.label}
                 </span>
               </button>
@@ -180,34 +168,28 @@ function App() {
         </div>
 
         {/* Settings at Bottom */}
-        <div className="mt-auto w-full p-2 group-hover:p-4 border-t border-white/5 bg-black/40">
+        <div className="mt-auto w-full p-2 px-3 border-t border-[rgba(255,255,255,0.06)] bg-[#202020]">
           <button 
             onClick={() => setActiveApp('settings')}
             aria-label="Settings"
             aria-current={activeApp === 'settings' ? 'page' : undefined}
-            className={`w-full flex items-center h-12 rounded-xl transition-all duration-200 relative
+            className={`w-full flex items-center h-9 rounded px-2 transition-all duration-150 relative
               ${activeApp === 'settings' 
-                ? 'bg-white/10 text-white' 
-                : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
+                ? 'bg-[rgba(255,255,255,0.1)] text-white font-medium' 
+                : 'text-[#ababab] hover:bg-[rgba(255,255,255,0.06)] hover:text-[#e0e0e0]'
               }`}
           >
-            {activeApp === 'settings' && (
-              <motion.div 
-                layoutId="activeTabIndicator"
-                className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 rounded-r-full" 
-              />
-            )}
-            <div className="w-12 h-12 flex items-center justify-center shrink-0"><Settings size={20} /></div>
-            <span className="font-medium text-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">Settings</span>
+            <div className="w-8 h-9 flex items-center justify-center shrink-0 mr-2"><Settings size={20} /></div>
+            <span className="font-normal text-[13px] whitespace-nowrap">Settings</span>
           </button>
         </div>
       </nav>
 
-      {/* Main Content Area - offset by sidebar width (16 = 4rem) */}
-      <main className="flex-1 h-full relative ml-16 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/10 via-[#050505] to-[#050505]">
+      {/* Main Content Area */}
+      <main className="flex-1 h-full relative bg-[#202020]">
         
         {/* Native Custom Title Bar */}
-        <div data-tauri-drag-region className="h-8 w-full absolute top-0 left-0 z-40 flex justify-end items-center px-4 select-none">
+        <div data-tauri-drag-region className="h-8 w-full absolute top-0 left-0 z-40 flex justify-end items-center px-4 select-none bg-[#202020]">
           <button onClick={() => invoke('plugin:window|close')} aria-label="Close window" className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-400 cursor-pointer ml-2" />
           <button onClick={() => invoke('plugin:window|minimize')} aria-label="Minimize window" className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-400 cursor-pointer ml-2" />
           <button onClick={() => invoke('plugin:window|maximize')} aria-label="Maximize window" className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-400 cursor-pointer ml-2" />
@@ -229,8 +211,8 @@ function App() {
             <ErrorBoundary>
               <Suspense fallback={
                 <div className="w-full h-full flex flex-col items-center justify-center">
-                  <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                  <div className="mt-4 text-indigo-400 font-mono text-xs uppercase tracking-widest animate-pulse">Loading Module...</div>
+                  <div className="w-8 h-8 border-4 border-[#0078d4] border-t-transparent rounded-full animate-spin"></div>
+                  <div className="mt-4 text-[#0078d4] font-mono text-xs uppercase tracking-widest animate-pulse">Loading Module...</div>
                 </div>
               }>
                 <ErrorBoundary>

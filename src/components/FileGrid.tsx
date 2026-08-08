@@ -212,56 +212,65 @@ export const FileGrid = ({
   });
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#0a0f18]">
+    <div className="flex flex-col h-full w-full bg-[#202020]">
       <Breadcrumb />
       
       {/* Toolbar */}
-      <div className="flex justify-between items-center px-4 py-2 border-b border-white/5">
-        <div className="flex gap-2">
+      <div className="flex justify-between items-center px-4 py-1.5 bg-[#272727] h-[40px] border-b border-[rgba(255,255,255,0.08)]">
+        <div className="flex gap-0.5 items-center">
           <button 
             onClick={() => { setIsCreating('file'); setNewItemName(''); }}
-            className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-white/5 hover:bg-white/10 text-gray-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded text-[#e0e0e0] hover:bg-[rgba(255,255,255,0.08)] transition-colors"
           >
             <FilePlus size={14} /> New File
           </button>
           <button 
             onClick={() => { setIsCreating('folder'); setNewItemName(''); }}
-            className="flex items-center gap-1 px-3 py-1 text-sm rounded-md bg-white/5 hover:bg-white/10 text-gray-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded text-[#e0e0e0] hover:bg-[rgba(255,255,255,0.08)] transition-colors"
           >
             <FolderPlus size={14} /> New Folder
           </button>
         </div>
         
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-2 items-center">
           <input 
             type="text" 
             placeholder="Search..." 
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="bg-black/50 border border-white/10 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-cyan"
+            className="bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.12)] rounded text-[#e0e0e0] text-[13px] px-2.5 py-1 focus:outline-none focus:border-[#0078d4]"
           />
-          <div className="flex gap-1 bg-black/40 rounded p-1 border border-white/5">
+          <div className="w-px h-5 bg-[rgba(255,255,255,0.1)] mx-1"></div>
+          <div className="flex gap-0.5">
             <button 
               onClick={() => setViewMode('grid')}
-              className={`p-1 rounded ${viewMode === 'grid' ? 'bg-white/20 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded transition-colors ${viewMode === 'grid' ? 'bg-[rgba(255,255,255,0.08)] text-[#e0e0e0]' : 'text-[#e0e0e0] hover:bg-[rgba(255,255,255,0.08)]'}`}
               title="Grid View"
             >
-              <Grid size={16} />
+              <Grid size={14} />
             </button>
             <button 
               onClick={() => setViewMode('list')}
-              className={`p-1 rounded ${viewMode === 'list' ? 'bg-white/20 text-white' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded transition-colors ${viewMode === 'list' ? 'bg-[rgba(255,255,255,0.08)] text-[#e0e0e0]' : 'text-[#e0e0e0] hover:bg-[rgba(255,255,255,0.08)]'}`}
               title="List View"
             >
-              <List size={16} />
+              <List size={14} />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4" ref={parentRef}>
+      <div className="flex-1 overflow-y-auto" ref={parentRef}>
+        {viewMode === 'list' && !loading && (
+          <div className="flex items-center text-[12px] text-[#767676] bg-[#1c1c1c] border-b border-[rgba(255,255,255,0.06)] px-3 py-1.5 sticky top-0 z-10">
+            <div className="flex-1 px-1">Name</div>
+            <div className="w-24 px-1">Type</div>
+            <div className="w-20 px-1 text-right">Size</div>
+          </div>
+        )}
+        <div className="p-4">
         {loading ? (
-          <div className="flex-1 flex items-center justify-center animate-pulse text-cyan py-12">Loading Files...</div>
+          <div className="flex-1 flex items-center justify-center animate-pulse text-[#0078d4] py-12">Loading Files...</div>
         ) : (
           <motion.div 
             variants={staggerContainer} 
@@ -275,8 +284,8 @@ export const FileGrid = ({
           >
             {/* Inline Creation Input */}
             {isCreating && (
-              <div className={`flex items-center gap-2 p-3 rounded-lg border border-cyan/50 bg-cyan/10 ${viewMode === 'grid' ? 'col-span-full md:col-span-1' : ''}`}>
-                <span className="text-xl">{isCreating === 'folder' ? '📁' : '📄'}</span>
+              <div className={`flex items-center gap-2 p-3 rounded border border-[#0078d4] bg-[rgba(0,120,212,0.08)] ${viewMode === 'grid' ? 'col-span-full md:col-span-1' : ''}`}>
+                <span className="text-xl flex-shrink-0">{isCreating === 'folder' ? '📁' : '📄'}</span>
                 <input 
                   autoFocus
                   type="text" 
@@ -287,7 +296,7 @@ export const FileGrid = ({
                     if (e.key === 'Escape') setIsCreating(null);
                   }}
                   onBlur={() => setIsCreating(null)}
-                  className="bg-transparent text-white text-sm outline-none w-full"
+                  className="bg-transparent text-[#e0e0e0] text-[13px] outline-none w-full"
                   placeholder={`New ${isCreating} name...`}
                 />
               </div>
@@ -326,7 +335,7 @@ export const FileGrid = ({
                         }}
                         onBlur={() => handleRename(file.path)}
                         onClick={e => e.stopPropagation()}
-                        className="bg-black/50 text-white text-sm px-1 outline-none border border-cyan/50 rounded flex-1"
+                        className="bg-black/50 text-[#e0e0e0] text-[13px] px-1 outline-none border border-[#0078d4] rounded flex-1"
                       />
                     );
                   }
@@ -337,7 +346,7 @@ export const FileGrid = ({
                         setRenamingPath(file.path);
                         setRenameValue(file.name);
                       }}
-                      className="font-mono text-sm text-gray-300 group-hover:text-white transition-colors truncate" 
+                      className="font-sans text-[13px] text-[#e0e0e0] truncate" 
                       title={file.name}
                     >
                       {file.name}
@@ -367,10 +376,10 @@ export const FileGrid = ({
                       if (file.is_dir) onNavigate(file.path);
                       else if (onFileDoubleClicked) onFileDoubleClicked(file.path);
                     }}
-                    whileHover={{ scale: 1.02, y: -2 }}
+                    whileHover={{ scale: 1.01 }}
                     className={`
-                      relative p-4 rounded-xl border cursor-pointer overflow-hidden group transition-all
-                      ${isSelected ? 'bg-cyan/10 border-cyan shadow-[0_0_15px_rgba(0,229,255,0.1)]' : file.is_dir ? 'border-cyan/20 bg-cyan/5 hover:bg-cyan/10' : 'border-white/10 bg-black/40 hover:bg-white/5'}
+                      relative p-4 rounded cursor-pointer overflow-hidden group transition-all
+                      ${isSelected ? 'bg-[rgba(0,120,212,0.25)] border-[rgba(0,120,212,0.5)] border' : 'border border-transparent hover:bg-[rgba(255,255,255,0.06)]'}
                     `}
                   >
                     {status && (
@@ -422,7 +431,7 @@ export const FileGrid = ({
                         }}
                         onBlur={() => handleRename(file.path)}
                         onClick={e => e.stopPropagation()}
-                        className="bg-black/50 text-white text-sm px-1 outline-none border border-cyan/50 rounded flex-1"
+                        className="bg-[rgba(255,255,255,0.05)] text-[#e0e0e0] text-[13px] px-1 outline-none border border-[#0078d4] rounded flex-1"
                       />
                     );
                   }
@@ -433,7 +442,7 @@ export const FileGrid = ({
                         setRenamingPath(file.path);
                         setRenameValue(file.name);
                       }}
-                      className="font-mono text-sm text-gray-300 group-hover:text-white transition-colors truncate" 
+                      className="font-sans text-[13px] text-[#e0e0e0] truncate" 
                       title={file.name}
                     >
                       {file.name}
@@ -463,22 +472,19 @@ export const FileGrid = ({
                       if (file.is_dir) onNavigate(file.path);
                       else if (onFileDoubleClicked) onFileDoubleClicked(file.path);
                     }}
-                    className={`absolute top-0 left-0 w-full flex items-center justify-between p-3 rounded-lg border cursor-pointer group transition-all
-                      ${isSelected ? 'bg-cyan/10 border-cyan shadow-[0_0_15px_rgba(0,229,255,0.1)]' : 'border-white/5 hover:bg-white/10'}
+                    className={`absolute top-0 left-0 w-full flex items-center px-3 py-1.5 cursor-pointer group transition-all rounded
+                      ${isSelected ? 'bg-[rgba(0,120,212,0.25)] border border-[rgba(0,120,212,0.5)]' : 'border border-transparent hover:bg-[rgba(255,255,255,0.06)]'}
                     `}
                     style={{
-                      height: `${virtualRow.size - 8}px`, // 8px for gap equivalent
+                      height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                   >
-                    <div className="flex items-center gap-3 flex-1 overflow-hidden">
+                    <div className="flex items-center gap-3 flex-1 overflow-hidden px-1">
                       <FileIcon />
                       <FileName />
-                    </div>
-                    
-                    <div className="flex items-center gap-8 text-xs text-gray-500 font-mono">
                       {status && (
-                        <span className={`px-2 py-0.5 rounded-md font-bold
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ml-2
                           ${isModified ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : ''}
                           ${isUntracked ? 'bg-green-500/20 text-green-400 border border-green-500/50' : ''}
                           ${isAdded ? 'bg-blue-500/20 text-blue-400 border border-blue-500/50' : ''}
@@ -486,7 +492,13 @@ export const FileGrid = ({
                           {status.trim()}
                         </span>
                       )}
-                      <span className="w-24 text-right">{file.is_dir ? '--' : formatSize(file.size_bytes)}</span>
+                    </div>
+                    
+                    <div className="w-24 px-1 text-[12px] text-[#ababab]">
+                      {file.is_dir ? 'File folder' : 'File'}
+                    </div>
+                    <div className="w-20 px-1 text-right text-[12px] text-[#ababab]">
+                      {file.is_dir ? '--' : formatSize(file.size_bytes)}
                     </div>
                   </motion.div>
                 );
@@ -494,15 +506,16 @@ export const FileGrid = ({
             )}
           </motion.div>
         )}
+        </div>
       </div>
       
       {contextMenu && (
         <div 
-          className="fixed z-50 bg-[#1e1e1e] border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[200px] text-sm"
+          className="fixed z-50 bg-[#2d2d2d] border border-[rgba(255,255,255,0.1)] rounded shadow-xl min-w-[200px] text-[13px] text-[#e0e0e0] py-1"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
           <div 
-            className="px-4 py-2 hover:bg-cyan/20 cursor-pointer text-gray-300 hover:text-white flex items-center gap-2"
+            className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer flex items-center gap-2"
             onClick={() => {
               setRenamingPath(contextMenu.path);
               setRenameValue(contextMenu.path.split(/[\\/]/).pop() || '');
@@ -512,7 +525,7 @@ export const FileGrid = ({
             <Edit2 size={14} /> Rename
           </div>
           <div 
-            className="px-4 py-2 hover:bg-red-500/20 cursor-pointer text-red-400 hover:text-red-300 flex items-center gap-2"
+            className="px-3 py-2 hover:bg-[rgba(255,100,100,0.1)] cursor-pointer text-[#ff6b6b] flex items-center gap-2"
             onClick={() => {
               handleDelete(contextMenu.path);
               setContextMenu(null);
@@ -521,10 +534,10 @@ export const FileGrid = ({
             <Trash2 size={14} /> Delete
           </div>
           
-          <div className="border-t border-white/5 my-1"></div>
+          <div className="border-t border-[rgba(255,255,255,0.08)] my-0.5"></div>
           
           <div 
-            className="px-4 py-2 hover:bg-cyan/20 cursor-pointer text-gray-300 hover:text-white"
+            className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer"
             onClick={() => {
               if (onAddToShelf) onAddToShelf(contextMenu.path);
               setContextMenu(null);
@@ -535,7 +548,7 @@ export const FileGrid = ({
           
           {(!files.find(f => f.path === contextMenu.path)?.is_dir) && (
              <div 
-               className="px-4 py-2 hover:bg-cyan/20 cursor-pointer text-gray-300 hover:text-white"
+               className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer"
                onClick={() => {
                  if (onFileDoubleClicked) onFileDoubleClicked(contextMenu.path);
                  setContextMenu(null);
@@ -545,11 +558,11 @@ export const FileGrid = ({
              </div>
           )}
           
-          <div className="border-t border-white/5 my-1"></div>
+          <div className="border-t border-[rgba(255,255,255,0.08)] my-0.5"></div>
           
           {(contextMenu.path.toLowerCase().endsWith('.png') || contextMenu.path.toLowerCase().endsWith('.jpg') || contextMenu.path.toLowerCase().endsWith('.svg')) && (
             <div 
-              className="px-4 py-2 hover:bg-green-500/20 cursor-pointer text-gray-300 hover:text-green-400"
+              className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer"
               onClick={() => {
                 if (onOptimizeAsset) onOptimizeAsset(contextMenu.path);
                 setContextMenu(null);
@@ -561,7 +574,7 @@ export const FileGrid = ({
           
           {(contextMenu.path.toLowerCase().endsWith('.json') || contextMenu.path.toLowerCase().endsWith('.yaml') || contextMenu.path.toLowerCase().endsWith('.yml')) && (
             <div 
-              className="px-4 py-2 hover:bg-cyan/20 cursor-pointer text-gray-300 hover:text-white"
+              className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer"
               onClick={() => {
                 const target = contextMenu.path.toLowerCase().endsWith('.json') ? 'yaml' : 'json';
                 if (onFormatConvert) onFormatConvert(contextMenu.path, target);
@@ -573,7 +586,7 @@ export const FileGrid = ({
           )}
           
           <div 
-            className="px-4 py-2 hover:bg-cyan/20 cursor-pointer text-gray-300 hover:text-white"
+            className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer"
             onClick={() => {
               if (onHashVerify) onHashVerify(contextMenu.path);
               setContextMenu(null);
@@ -582,10 +595,10 @@ export const FileGrid = ({
             #️⃣ Verify Checksum
           </div>
 
-          <div className="border-t border-white/5 my-1"></div>
+          <div className="border-t border-[rgba(255,255,255,0.08)] my-0.5"></div>
 
           <div 
-            className="px-4 py-2 hover:bg-cyan/20 cursor-pointer text-gray-300 hover:text-white"
+            className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer"
             onClick={() => {
               navigator.clipboard.writeText(contextMenu.path);
               setContextMenu(null);
@@ -595,7 +608,7 @@ export const FileGrid = ({
           </div>
 
           <div 
-            className="px-4 py-2 hover:bg-cyan/20 cursor-pointer text-gray-300 hover:text-white"
+            className="px-3 py-2 hover:bg-[rgba(255,255,255,0.08)] cursor-pointer"
             onClick={() => {
               const uri = `file:///${contextMenu.path.replace(/\\/g, '/')}`;
               navigator.clipboard.writeText(uri);
@@ -605,7 +618,7 @@ export const FileGrid = ({
             🌐 Copy File URI
           </div>
 
-          <div className="border-t border-white/5 my-1"></div>
+          <div className="border-t border-[rgba(255,255,255,0.08)] my-0.5"></div>
           <GitContextMenu 
             x={contextMenu.x} 
             y={contextMenu.y} 
@@ -618,27 +631,27 @@ export const FileGrid = ({
       )}
 
       {deleteConfirmTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-panel border border-white/10 rounded-xl p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
-            <h3 className="text-xl font-bold text-white">Confirm Deletion</h3>
-            <p className="text-gray-300 text-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-[#2d2d2d] border border-[rgba(255,255,255,0.1)] rounded-lg p-6 max-w-md w-full flex flex-col gap-4 shadow-2xl">
+            <h3 className="text-xl font-semibold text-[#ffffff]">Confirm Deletion</h3>
+            <p className="text-[#ababab] text-[13px]">
               {deleteConfirmTarget.isDir 
                 ? "Are you sure you want to delete this folder and all its contents?" 
                 : "Are you sure you want to delete this file?"}
             </p>
-            <p className="text-xs font-mono text-red-400 bg-black/50 p-2 rounded break-all border border-red-500/20">
+            <p className="text-[12px] text-[#ff6b6b] bg-[rgba(255,100,100,0.05)] p-2 rounded break-all border border-[rgba(255,100,100,0.2)]">
               {deleteConfirmTarget.path}
             </p>
             <div className="flex justify-end gap-3 mt-2">
               <button
                 onClick={() => setDeleteConfirmTarget(null)}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm transition-colors"
+                className="px-4 py-2 bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.12)] text-[#e0e0e0] rounded text-[13px] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => confirmDeleteFile(deleteConfirmTarget.path)}
-                className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-sm transition-colors"
+                className="px-4 py-2 bg-[#d32f2f] hover:bg-[#c62828] text-white rounded text-[13px] transition-colors"
               >
                 Delete
               </button>
