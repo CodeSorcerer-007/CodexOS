@@ -26,3 +26,18 @@ dist-ssr
 # Rust build artifacts
 rustup-init.exe
 target/
+
+# Secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+
+# Local debug artifacts
+src-tauri/boot_trace.txt
+src-tauri/out.txt

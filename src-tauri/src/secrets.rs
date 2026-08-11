@@ -54,6 +54,14 @@ fn vault_path(app: &AppHandle) -> PathBuf {
     path
 }
 
+fn ensure_vault_dir(app: &AppHandle) -> Result<(), String> {
+    let path = app.path().app_data_dir().map_err(|e| format!("App data dir error: {}", e))?;
+    if !path.exists() {
+        fs::create_dir_all(&path).map_err(|e| format!("Failed to create app data dir: {}", e))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn is_vault_locked(state: tauri::State<'_, SecretsState>) -> bool {
     state.master_key.lock().unwrap().is_none()
@@ -75,7 +83,7 @@ pub fn unlock_vault(
         let nonce = ChaCha20Poly1305::generate_nonce(&mut ChaChaRng);
         
         let empty_cache: HashMap<String, String> = HashMap::new();
-        let data = serde_json::to_vec(&empty_cache).unwrap();
+        let data = serde_json::to_vec(&empty_cache).map_err(|e| format!("Serialize error: {}", e))?;
         
         let ciphertext = cipher.encrypt(&nonce, data.as_ref())
             .map_err(|e| format!("Encrypt error: {}", e))?;
@@ -85,7 +93,9 @@ pub fn unlock_vault(
             nonce: hex::encode(nonce),
             ciphertext: hex::encode(ciphertext),
         };
-        fs::write(&path, serde_json::to_string(&vault).unwrap()).unwrap();
+        ensure_vault_dir(&app)?;
+        let vault_json = serde_json::to_string(&vault).map_err(|e| format!("Serialize vault error: {}", e))?;
+        fs::write(&path, vault_json).map_err(|e| format!("Failed to write vault: {}", e))?;
         
         *state.master_key.lock().unwrap() = Some(key);
         return Ok(true);
@@ -137,13 +147,14 @@ fn save_vault(app: &AppHandle, state: &SecretsState) -> Result<(), String> {
     let nonce = ChaCha20Poly1305::generate_nonce(&mut ChaChaRng);
     
     let map = state.cache.lock().unwrap().clone();
-    let pt = serde_json::to_vec(&map).unwrap();
+    let pt = serde_json::to_vec(&map).map_err(|e| format!("Serialize cache error: {}", e))?;
     let ciphertext = cipher.encrypt(&nonce, pt.as_ref()).map_err(|e| e.to_string())?;
     
     vault.nonce = hex::encode(nonce);
     vault.ciphertext = hex::encode(ciphertext);
     
-    fs::write(&path, serde_json::to_string(&vault).unwrap()).map_err(|e| e.to_string())?;
+    let vault_json = serde_json::to_string(&vault).map_err(|e| format!("Serialize vault error: {}", e))?;
+    fs::write(&path, vault_json).map_err(|e| e.to_string())?;
     Ok(())
 }
 
