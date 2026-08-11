@@ -189,9 +189,29 @@ The card animates in with Framer Motion and can be dismissed permanently for tha
 - **Native IPC Bridge**: All heavy lifting (file ops, git, crypto, docker, PTY) runs in Rust via Tauri's type-safe `invoke` IPC.
 - **AI Copilot**: Fully async Rust backend — the Tauri main thread is never blocked during Mistral API calls.
 
+## ⚡ Quick Installation (For Windows & PC Users)
+
+No coding or dev tools required! Pick your preferred installation method below:
+
+### Option 1: Direct Download (Recommended)
+Download the latest pre-compiled installer directly from GitHub Releases:
+- 📦 **[Download Latest Windows Installer (.msi / .exe)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
+
+### Option 2: Windows Package Manager (`winget`)
+Open PowerShell or Command Prompt and run:
+```powershell
+winget install CodeSorcerer.CodexOS
+```
+
+### Option 3: One-Click PowerShell Installer
+Run this command in Windows PowerShell to automatically fetch and install the latest release:
+```powershell
+iwr -useb https://raw.githubusercontent.com/CodeSorcerer-007/CodexOS/main/install.ps1 | iex
+```
+
 ---
 
-## ⚙️ Getting Started
+## ⚙️ Building from Source (For Developers)
 
 ### Prerequisites
 - [Rust](https://rustup.rs/) (latest stable)
