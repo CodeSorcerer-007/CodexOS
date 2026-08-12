@@ -65,7 +65,8 @@ pub fn get_top_processes_memory(state: tauri::State<'_, SysState>) -> Vec<Proces
         }
     }).collect();
 
-    processes.sort_by_key(|b| std::cmp::Reverse(b.memory_bytes));
+    // Sort descending by memory first, then take the top 20.
+    processes.sort_by_key(|p| std::cmp::Reverse(p.memory_bytes));
     processes.into_iter().take(20).collect()
 }
 

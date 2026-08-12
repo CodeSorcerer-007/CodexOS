@@ -13,9 +13,6 @@ use chacha20poly1305::{
 use zeroize::Zeroizing;
 use tauri::{AppHandle, Manager};
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
 #[derive(Serialize, Deserialize)]
 struct EncryptedVault {
     salt: String,
@@ -27,6 +24,8 @@ pub struct SecretsState {
     pub cache: Mutex<HashMap<String, String>>,
     pub known_keys: Mutex<Vec<String>>,
     pub master_key: Mutex<Option<Zeroizing<Vec<u8>>>>,
+    pub failed_attempts: Mutex<u32>,
+    pub last_failed_attempt: Mutex<Option<std::time::Instant>>,
 }
 
 impl SecretsState {
@@ -35,6 +34,8 @@ impl SecretsState {
             cache: Mutex::new(HashMap::new()),
             known_keys: Mutex::new(Vec::new()),
             master_key: Mutex::new(None),
+            failed_attempts: Mutex::new(0),
+            last_failed_attempt: Mutex::new(None),
         }
     }
 }
@@ -73,6 +74,18 @@ pub fn unlock_vault(
     state: tauri::State<'_, SecretsState>,
     password: String,
 ) -> Result<bool, String> {
+    // Check lockout
+    {
+        let attempts = *state.failed_attempts.lock().unwrap();
+        if attempts >= 3 {
+            if let Some(last) = *state.last_failed_attempt.lock().unwrap() {
+                if last.elapsed().as_secs() < 5 {
+                    return Err("Vault locked due to multiple failed attempts. Please wait 5 seconds.".to_string());
+                }
+            }
+        }
+    }
+
     let path = vault_path(&app);
     if !path.exists() {
         // Init new vault
@@ -115,13 +128,24 @@ pub fn unlock_vault(
     
     match cipher.decrypt(nonce, cipher_bytes.as_ref()) {
         Ok(pt) => {
-            let map: HashMap<String, String> = serde_json::from_slice(&pt).unwrap_or_default();
+            let map: HashMap<String, String> = serde_json::from_slice(&pt).map_err(|e| {
+                format!(
+                    "Vault data is corrupted and could not be read ({}). \
+                     Your vault file may be damaged. Back up '{}' and contact support.",
+                    e,
+                    vault_path(&app).display()
+                )
+            })?;
             *state.cache.lock().unwrap() = map.clone();
             *state.known_keys.lock().unwrap() = map.keys().cloned().collect();
             *state.master_key.lock().unwrap() = Some(key);
+            *state.failed_attempts.lock().unwrap() = 0;
+            *state.last_failed_attempt.lock().unwrap() = None;
             Ok(true)
         }
         Err(_) => {
+            *state.failed_attempts.lock().unwrap() += 1;
+            *state.last_failed_attempt.lock().unwrap() = Some(std::time::Instant::now());
             Err("Invalid password".to_string())
         }
     }
@@ -234,10 +258,10 @@ pub fn run_with_secrets(
     if state.master_key.lock().unwrap().is_none() {
         return Err("Vault is locked".to_string());
     }
-    
+
     let mut envs = HashMap::new();
     let cache = state.cache.lock().unwrap();
-    
+
     for key in &required_keys {
         if let Some(val) = cache.get(key) {
             envs.insert(key.clone(), val.clone());
@@ -247,27 +271,171 @@ pub fn run_with_secrets(
     }
     drop(cache);
 
-    let mut cmd_obj = std::process::Command::new("cmd");
-    
-    #[cfg(target_os = "windows")]
-    {
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        cmd_obj.args(["/C", &cmd]).creation_flags(CREATE_NO_WINDOW);
+    // Split the command string into an argv-style list to avoid passing the
+    // raw user string to a shell interpreter (`cmd /C` or `sh -c`), which
+    // would allow command injection via shell metacharacters.
+    //
+    // We use a minimal whitespace tokeniser: single/double-quoted spans are
+    // preserved as single tokens; outside quotes, whitespace is the delimiter.
+    let argv = split_command_args(&cmd)
+        .map_err(|e| format!("Invalid command syntax: {}", e))?;
+
+    if argv.is_empty() {
+        return Err("Command must not be empty".to_string());
     }
-    
-    #[cfg(not(target_os = "windows"))]
-    {
-        cmd_obj = std::process::Command::new("sh");
-        cmd_obj.args(["-c", &cmd]);
+
+    let executable = &argv[0];
+    let args = &argv[1..];
+
+    // Reject shell built-ins and metacharacters that would only make sense
+    // in a shell context — defence-in-depth guard.
+    for ch in ['&', '|', ';', '`', '$', '<', '>'] {
+        if executable.contains(ch) {
+            return Err(format!(
+                "Command contains disallowed shell metacharacter '{}'",
+                ch
+            ));
+        }
     }
-    
+
+    let mut cmd_obj = std::process::Command::new(executable);
+    cmd_obj.args(args);
     cmd_obj.envs(&envs);
 
-    let output = cmd_obj.output().map_err(|e| format!("Failed to execute process: {}", e))?;
-    
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd_obj.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let output = cmd_obj
+        .output()
+        .map_err(|e| format!("Failed to execute process: {}", e))?;
+
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+/// Minimal POSIX-style argument tokeniser.
+/// Splits on unquoted whitespace; honours single and double quotes.
+/// Returns an error if a quoted span is never closed.
+fn split_command_args(input: &str) -> Result<Vec<String>, String> {
+    let mut args: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            // Single-quoted span — take everything verbatim until closing '
+            '\'' => {
+                loop {
+                    match chars.next() {
+                        Some('\'') => break,
+                        Some(c) => current.push(c),
+                        None => return Err("Unterminated single-quoted string".to_string()),
+                    }
+                }
+            }
+            // Double-quoted span — honour \" and \\ escape sequences
+            '"' => {
+                loop {
+                    match chars.next() {
+                        Some('"') => break,
+                        Some('\\') => match chars.next() {
+                            Some(escaped) => current.push(escaped),
+                            None => return Err("Unterminated escape in double-quoted string".to_string()),
+                        },
+                        Some(c) => current.push(c),
+                        None => return Err("Unterminated double-quoted string".to_string()),
+                    }
+                }
+            }
+            // Unquoted whitespace — flush current token
+            c if c.is_whitespace() => {
+                if !current.is_empty() {
+                    args.push(current.clone());
+                    current.clear();
+                }
+            }
+            // Ordinary character
+            c => current.push(c),
+        }
+    }
+
+    if !current.is_empty() {
+        args.push(current);
+    }
+
+    Ok(args)
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::split_command_args;
+
+    #[test]
+    fn split_simple_command() {
+        assert_eq!(
+            split_command_args("echo hello world").unwrap(),
+            vec!["echo", "hello", "world"]
+        );
+    }
+
+    #[test]
+    fn split_double_quoted_span() {
+        assert_eq!(
+            split_command_args(r#"echo "hello world""#).unwrap(),
+            vec!["echo", "hello world"]
+        );
+    }
+
+    #[test]
+    fn split_single_quoted_span() {
+        assert_eq!(
+            split_command_args("echo 'hello world'").unwrap(),
+            vec!["echo", "hello world"]
+        );
+    }
+
+    #[test]
+    fn split_escape_in_double_quotes() {
+        assert_eq!(
+            split_command_args(r#"echo "hello \"world\"""#).unwrap(),
+            vec!["echo", r#"hello "world""#]
+        );
+    }
+
+    #[test]
+    fn split_unterminated_single_quote_errors() {
+        assert!(split_command_args("echo 'unterminated").is_err());
+    }
+
+    #[test]
+    fn split_unterminated_double_quote_errors() {
+        assert!(split_command_args(r#"echo "unterminated"#).is_err());
+    }
+
+    #[test]
+    fn split_empty_string_returns_empty_vec() {
+        assert_eq!(split_command_args("").unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn split_whitespace_only_returns_empty_vec() {
+        assert_eq!(split_command_args("   ").unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn split_multiple_spaces_between_args() {
+        assert_eq!(
+            split_command_args("  echo   foo   bar  ").unwrap(),
+            vec!["echo", "foo", "bar"]
+        );
     }
 }

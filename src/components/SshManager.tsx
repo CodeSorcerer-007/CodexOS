@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useStore } from '../store/store';
+import { useStore, useToast } from '../store/store';
 import { Server, Plus, Play, Trash2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { VaultUnlock } from './VaultUnlock';
@@ -13,7 +13,8 @@ interface SshConnection {
 
 export const SshManager = () => {
   const [connections, setConnections] = useState<SshConnection[]>([]);
-  const { setCurrentPath, setActiveApp, addToast } = useStore.getState();
+  const { setCurrentPath, setActiveApp } = useStore.getState();
+  const { success: toastSuccess } = useToast();
 
   useEffect(() => {
     const saved = localStorage.getItem('codexos-ssh');
@@ -37,7 +38,7 @@ export const SshManager = () => {
     const fullPath = `ssh://${conn.connectionStr}${conn.path}`;
     setCurrentPath(fullPath);
     setActiveApp('files');
-    addToast({ type: 'success', title: 'Connecting to SSH', message: `Target: ${conn.connectionStr}` });
+    toastSuccess('Connecting to SSH', `Target: ${conn.connectionStr}`);
   };
 
   const handleDelete = (id: string) => {

@@ -4,6 +4,33 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content Security Policy — tightened for Tauri 2 webview.
+      • default-src 'self'          — block all external origins by default
+      • script-src 'self'           — no inline scripts, no eval
+      • style-src 'self' 'unsafe-inline' — Tailwind/framer inject inline styles
+      • font-src 'self' https://fonts.gstatic.com — Google Fonts
+      • style-src-elem https://fonts.googleapis.com — Google Fonts CSS
+      • connect-src 'self' ipc:     — Tauri IPC only (Mistral calls go via Rust)
+      • img-src 'self' data: blob:  — SVG icons, canvas, blob URLs
+      • object-src 'none'           — no plugins
+      • base-uri 'self'             — prevent base tag injection
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        connect-src 'self' ipc: https://ipc.localhost;
+        img-src 'self' data: blob:;
+        worker-src blob:;
+        object-src 'none';
+        base-uri 'self';
+      "
+    />
     <title>CodexOS</title>
   </head>
   <body>

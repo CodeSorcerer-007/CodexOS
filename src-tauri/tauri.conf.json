@@ -19,12 +19,12 @@
         "height": 600,
         "resizable": true,
         "fullscreen": false,
-        "decorations": true,
+        "decorations": false,
         "transparent": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: https://asset.localhost data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost http://localhost:11434 https://api.mistral.ai wss://signaling.yjs.dev wss://y-webrtc-signaling-eu.herokuapp.com; media-src 'none'; object-src 'none'; frame-src 'none'"
     }
   },
   "bundle": {

@@ -1,9 +1,5 @@
-use portable_pty::{CommandBuilder, native_pty_system, PtySize};
-use std::thread;
-use std::io::{Read, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use sysinfo::System;
-use tauri::{Emitter, State};
 
 mod vault;
 mod db;
@@ -26,71 +22,12 @@ pub mod archive;
 pub mod crypto_tools;
 pub mod ssh;
 
-struct PtyState {
-    writer: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
-    child: Arc<Mutex<Option<Box<dyn portable_pty::Child + Send + Sync>>>>,
-    master: Arc<Mutex<Option<Box<dyn portable_pty::MasterPty + Send>>>>,
-}
-
-
-#[tauri::command]
-fn start_pty(app_handle: tauri::AppHandle, state: State<'_, PtyState>) -> Result<(), String> {
-    let pty_system = native_pty_system();
-    let pair = pty_system.openpty(PtySize {
-        rows: 24,
-        cols: 80,
-        pixel_width: 0,
-        pixel_height: 0,
-    }).map_err(|e| e.to_string())?;
-
-    let default_shell = if cfg!(target_os = "windows") {
-        "powershell.exe"
-    } else {
-        "/bin/bash"
-    };
-    let cmd = CommandBuilder::new(default_shell);
-    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
-
-    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
-
-    *state.writer.lock().unwrap() = Some(writer);
-    *state.child.lock().unwrap() = Some(child);
-    *state.master.lock().unwrap() = Some(pair.master);
-
-    thread::spawn(move || {
-        let mut buf = [0u8; 1024];
-        while let Ok(n) = reader.read(&mut buf) {
-            if n == 0 { break; }
-            let s = String::from_utf8_lossy(&buf[..n]);
-            let _ = app_handle.emit("pty-output", s.to_string());
-        }
-    });
-
-    Ok(())
-}
-
-#[tauri::command]
-fn write_pty(data: String, state: State<'_, PtyState>) -> Result<(), String> {
-    if let Some(writer) = state.writer.lock().unwrap().as_mut() {
-        writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let sys = System::new();
     
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(PtyState {
-            writer: Arc::new(Mutex::new(None)),
-            child: Arc::new(Mutex::new(None)),
-            master: Arc::new(Mutex::new(None)),
-        })
         .manage(ports::TailState {
             task: Mutex::new(None),
         })
@@ -125,8 +62,6 @@ pub fn run() {
             proxy::kv_get,
             plugin::run_wasm_plugin,
             plugin::run_wasi_nano_vm,
-            start_pty,
-            write_pty,
             sys::get_sys_stats,
             sys::get_top_processes_memory,
             sys::get_gpu_info,

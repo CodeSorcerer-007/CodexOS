@@ -1,25 +1,19 @@
 import { useState, useCallback, useEffect } from 'react';
-import ReactFlow, { 
-  Controls, 
-  Background, 
-  useNodesState, 
-  useEdgesState, 
-  addEdge, 
-  type Connection, 
-  type Edge 
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+import { type Node, type Edge, ReactFlow, Background, Controls, useNodesState, useEdgesState, addEdge, type Connection } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { invoke } from '@tauri-apps/api/core';
 import { useStore, useToast } from '../store/store';
 import { Save, PlayCircle, Settings, Plus } from 'lucide-react';
 
-const initialNodes = [
+type AutomationNode = Node<{ label: string }>;
+
+const initialNodes: AutomationNode[] = [
   { id: '1', position: { x: 250, y: 50 }, data: { label: 'Start Pipeline' }, type: 'input' },
   { id: '2', position: { x: 250, y: 150 }, data: { label: 'Run: echo "Hello CodexOS"' } },
   { id: '3', position: { x: 250, y: 250 }, data: { label: 'Notify Success' }, type: 'output' },
 ];
 
-const initialEdges = [
+const initialEdges: Edge[] = [
   { id: 'e1-2', source: '1', target: '2', animated: true },
   { id: 'e2-3', source: '2', target: '3', animated: true },
 ];

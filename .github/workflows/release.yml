@@ -10,20 +10,62 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
+
       - name: Install frontend dependencies
         run: npm ci
-      - name: Run tests
+
+      - name: Run frontend tests
         run: npm test
-      - name: Run lint
+
+      - name: Run frontend lint
         run: npm run lint
 
+  test-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run Rust tests
+        run: cargo test
+        working-directory: src-tauri
+
+      - name: Run Rust linter (Clippy)
+        run: cargo clippy -- -D warnings
+        working-directory: src-tauri
+
   build:
-    needs: test
+    needs: [test, test-rust]
     strategy:
       fail-fast: false
       matrix:

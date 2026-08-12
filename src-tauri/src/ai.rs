@@ -232,7 +232,7 @@ impl ContextBundle {
     }
 }
 
-fn gather_context(
+async fn gather_context(
     trigger: &DiagnosticTrigger,
     app: &AppHandle,
     pty_state: &MultiPtyState,
@@ -271,31 +271,43 @@ fn gather_context(
                     process_name, delta_mb, threshold_mb
                 ),
             );
-            let mut sys = sys_state.0.lock().unwrap();
-            sys.refresh_all();
-            let stats = format!(
-                "System memory: {} MB used / {} MB total\nCPU: {:.1}%",
-                sys.used_memory() / 1024 / 1024,
-                sys.total_memory() / 1024 / 1024,
-                sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32
-            );
-            ctx.push("System Stats", stats);
 
-            sys.refresh_processes();
-            let top: Vec<String> = sys
-                .processes()
-                .iter()
-                .map(|(pid, proc)| {
-                    format!(
-                        "{} (PID {}) — {} MB",
-                        proc.name(),
-                        pid.as_u32(),
-                        proc.memory() / 1024
-                    )
-                })
-                .take(10)
-                .collect();
-            ctx.push("Top Processes", top.join("\n"));
+            // Refresh sysinfo on a blocking thread so we don't stall the
+            // Tokio async runtime (sysinfo::System::refresh_all is synchronous
+            // and can be slow on loaded machines).
+            let sys_state_mutex = sys_state.0.clone();
+            let (stats, top) = tokio::task::spawn_blocking(move || {
+                let mut sys = sys_state_mutex.lock().unwrap();
+                sys.refresh_all();
+                let stats = format!(
+                    "System memory: {} MB used / {} MB total\nCPU: {:.1}%",
+                    sys.used_memory() / 1024 / 1024,
+                    sys.total_memory() / 1024 / 1024,
+                    sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>()
+                        / sys.cpus().len() as f32
+                );
+                sys.refresh_processes();
+                let mut procs: Vec<(String, u32, u64)> = sys
+                    .processes()
+                    .iter()
+                    .map(|(pid, proc)| {
+                        (proc.name().to_string(), pid.as_u32(), proc.memory())
+                    })
+                    .collect();
+                // Sort descending by memory so "top 10" is actually the top 10.
+                procs.sort_by_key(|(_, _, mem)| std::cmp::Reverse(*mem));
+                let top = procs
+                    .into_iter()
+                    .take(10)
+                    .map(|(name, pid, mem)| {
+                        format!("{} (PID {}) — {} MB", name, pid, mem / 1024)
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                (stats, top)
+            }).await.map_err(|e| format!("Spawn blocking error: {}", e)).unwrap_or_default();
+            ctx.push("System Stats", stats);
+            ctx.push("Top Processes", top);
         }
         DiagnosticTrigger::ProxyError {
             request_id,
@@ -480,7 +492,7 @@ pub async fn diagnose_issue(
         &pty_state,
         &sys_state,
         repo_path.as_deref(),
-    );
+    ).await;
     let context_str = ctx.to_prompt();
 
     if context_str.trim().is_empty() {

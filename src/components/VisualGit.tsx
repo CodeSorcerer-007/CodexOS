@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useToast } from '../store/store';
-import ReactFlow, { Background, Controls } from 'reactflow';
-import 'reactflow/dist/style.css';
+import { ReactFlow, Background, Controls } from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 
 interface GitStatus {
   staged: string[];

@@ -8,7 +8,7 @@
 
   [![Built with Tauri](https://img.shields.io/badge/Built_with-Tauri_2.0-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](#)
   [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](#)
-  [![Rust](https://img.shields.io/badge/Rust-1.75+-000000?style=for-the-badge&logo=rust&logoColor=white)](#)
+  [![Rust](https://img.shields.io/badge/Rust-1.77.2+-000000?style=for-the-badge&logo=rust&logoColor=white)](#)
   [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](#)
   [![Mistral AI](https://img.shields.io/badge/Mistral-AI_Copilot-FF7000?style=for-the-badge&logo=openai&logoColor=white)](#)
   [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#)
@@ -19,7 +19,7 @@
 CodexOS is a next-generation developer environment and control center designed from the ground up for speed, power, and offline capabilities. Bypassing Electron's bloat in favor of **Tauri 2.0 (Rust)**, CodexOS brings deep native OS integration directly into a gorgeous, ultra-premium glassmorphic React interface.
 
 > [!NOTE]
-> **Windows Ready:** This application is tailored for Windows and can be cloned and run natively on any Windows system without complex configuration.
+> **Cross-Platform Ready:** This application is built for everyone and runs natively on Windows, macOS, and Linux without complex configuration.
 
 ---
 
@@ -189,13 +189,15 @@ The card animates in with Framer Motion and can be dismissed permanently for tha
 - **Native IPC Bridge**: All heavy lifting (file ops, git, crypto, docker, PTY) runs in Rust via Tauri's type-safe `invoke` IPC.
 - **AI Copilot**: Fully async Rust backend — the Tauri main thread is never blocked during Mistral API calls.
 
-## ⚡ Quick Installation (For Windows & PC Users)
+## ⚡ Quick Installation
 
 No coding or dev tools required! Pick your preferred installation method below:
 
 ### Option 1: Direct Download (Recommended)
-Download the latest pre-compiled installer directly from GitHub Releases:
-- 📦 **[Download Latest Windows Installer (.msi / .exe)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
+Download the latest pre-compiled installers for your OS directly from GitHub Releases:
+- 🪟 **[Windows Installer (.msi / .exe)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
+- 🍏 **[macOS Installer (.dmg / .app)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
+- 🐧 **[Linux AppImage (.AppImage / .deb)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
 
 ### Option 2: Windows Package Manager (`winget`)
 Open PowerShell or Command Prompt and run:
@@ -312,7 +314,7 @@ CodexOS/
 │           └── tasks.md
 ├── index.html
 ├── vite.config.ts
-├── tailwind.config.js
+├── postcss.config.js
 └── package.json
 ```
 

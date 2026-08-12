@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Terminal } from 'xterm';
-import { FitAddon } from 'xterm-addon-fit';
-import 'xterm/css/xterm.css';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useDiagnosisStore, type Diagnosis } from '../store/diagnosisStore';
@@ -129,7 +129,7 @@ export const TerminalPane = ({ id, onClose, showClose, shell, cwd, command = nul
       unlistenExit = unlistenerExit;
 
       // Send input to the specific terminal ID
-      term.onData((data) => {
+      term.onData((data: string) => {
         invoke('write_multiplex_pty', { id, data }).catch(e => {
           toastError('Terminal Error', e instanceof Error ? e.message : String(e));
         });

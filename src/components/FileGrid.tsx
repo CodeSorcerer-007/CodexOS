@@ -32,7 +32,7 @@ import {
   PanelRight24Regular,
   Add24Regular,
   ArrowSort24Regular,
-  DocumentCode24Regular,
+  
   FolderZip24Regular,
   DocumentPdf24Regular
 } from '@fluentui/react-icons';
@@ -75,8 +75,8 @@ export const FileGrid = ({
   onNavigate, 
   selectedFile, 
   onSelect,
-  _onHashVerify,
-  _onFormatConvert,
+  
+  
   onAddToShelf,
   onOptimizeAsset,
   onFileDoubleClicked
@@ -368,7 +368,7 @@ export const FileGrid = ({
       return <Image24Regular className="text-[#00b4d8]" />;
     }
     if (name.endsWith('.js') || name.endsWith('.ts') || name.endsWith('.jsx') || name.endsWith('.tsx') || name.endsWith('.json') || name.endsWith('.css') || name.endsWith('.html')) {
-      return <DocumentCode24Regular className="text-[#ff4d6d]" />;
+      return <Document24Regular className="text-[#ff4d6d]" />;
     }
     if (name.endsWith('.zip') || name.endsWith('.tar') || name.endsWith('.gz') || name.endsWith('.rar')) {
       return <FolderZip24Regular className="text-[#ffb703]" />;
@@ -1022,7 +1022,7 @@ export const FileGrid = ({
               setContextMenu(null);
             }}
           >
-            🗃️ Add to Shelf
+            ðŸ—ƒï¸ Add to Shelf
           </div>
           
           {(files.find(f => f.path === contextMenu.path)?.is_dir) && (
@@ -1045,7 +1045,7 @@ export const FileGrid = ({
                  setContextMenu(null);
                }}
              >
-               📄 Preview
+               ðŸ“„ Preview
              </div>
           )}
           
@@ -1059,7 +1059,7 @@ export const FileGrid = ({
                 setContextMenu(null);
               }}
             >
-              ⚡ Optimize Asset
+              âš¡ Optimize Asset
             </div>
           )}
           
@@ -1072,7 +1072,7 @@ export const FileGrid = ({
               setContextMenu(null);
             }}
           >
-            📋 Copy Absolute Path
+            ðŸ“‹ Copy Absolute Path
           </div>
 
           <div className="border-t border-[rgba(255,255,255,0.08)] my-0.5"></div>
