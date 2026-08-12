@@ -101,7 +101,7 @@ const getSavedSettings = () => {
     memorySpikeThresholdMb: 500,
     memorySpikeWindowSec: 10,
   };
-  const saved = localStorage.getItem('codexos-settings');
+  const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('codexos-settings') : null;
   if (saved) {
     try {
       return { ...defaults, ...JSON.parse(saved) };
