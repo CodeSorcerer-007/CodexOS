@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::process::{Child, Command, Stdio};
-use std::io::{BufRead, BufReader};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader};
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 
 pub struct TunnelProcess {
@@ -45,20 +45,27 @@ pub fn start_tunnel(
     // ssh -R 80:localhost:{port} nokey@serveo.net
     let mut child = Command::new("ssh")
         .args([
-            "-o", "StrictHostKeyChecking=accept-new",
-            "-o", "ServerAliveInterval=60",
-            "-R", &format!("80:localhost:{}", local_port),
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "ServerAliveInterval=60",
+            "-R",
+            &format!("80:localhost:{}", local_port),
             "nokey@serveo.net",
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to start SSH tunnel: {}. Make sure OpenSSH is installed.", e))?;
+        .map_err(|e| {
+            format!(
+                "Failed to start SSH tunnel: {}. Make sure OpenSSH is installed.",
+                e
+            )
+        })?;
 
     // Read the assigned URL from ssh output
     // serveo.net outputs: "Forwarding HTTP traffic from https://xxxx.serveo.net"
-    let stderr = child.stderr.take()
-        .ok_or("Could not capture ssh stderr")?;
+    let stderr = child.stderr.take().ok_or("Could not capture ssh stderr")?;
 
     let reader = BufReader::new(stderr);
     let mut public_url = String::new();
@@ -66,26 +73,35 @@ pub fn start_tunnel(
     for line in reader.lines().take(20).flatten() {
         // Emit progress to frontend
         let _ = app_handle.emit("tunnel-log", &line);
-            if line.contains("https://") {
-                // Extract URL from the line
-                if let Some(url_start) = line.find("https://") {
-                    public_url = line[url_start..].split_whitespace().next()
-                        .unwrap_or("").to_string();
-                    break;
-                }
+        if line.contains("https://") {
+            // Extract URL from the line
+            if let Some(url_start) = line.find("https://") {
+                public_url = line[url_start..]
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                break;
             }
-            if line.contains("http://") {
-                if let Some(url_start) = line.find("http://") {
-                    public_url = line[url_start..].split_whitespace().next()
-                        .unwrap_or("").to_string();
-                    break;
-                }
+        }
+        if line.contains("http://") {
+            if let Some(url_start) = line.find("http://") {
+                public_url = line[url_start..]
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                break;
             }
+        }
     }
 
     if public_url.is_empty() {
         let _ = child.kill();
-        return Err("Could not obtain public URL from SSH relay. Check your internet connection.".to_string());
+        return Err(
+            "Could not obtain public URL from SSH relay. Check your internet connection."
+                .to_string(),
+        );
     }
 
     let info = TunnelInfo {
@@ -94,11 +110,14 @@ pub fn start_tunnel(
         status: "Active".to_string(),
     };
 
-    tunnels.insert(local_port, TunnelProcess {
-        child,
-        public_url,
+    tunnels.insert(
         local_port,
-    });
+        TunnelProcess {
+            child,
+            public_url,
+            local_port,
+        },
+    );
 
     Ok(info)
 }
@@ -115,9 +134,12 @@ pub fn stop_tunnel(state: tauri::State<'_, TunnelState>, local_port: u16) -> Res
 #[tauri::command]
 pub fn list_tunnels(state: tauri::State<'_, TunnelState>) -> Vec<TunnelInfo> {
     let tunnels = state.tunnels.lock().unwrap();
-    tunnels.values().map(|t| TunnelInfo {
-        local_port: t.local_port,
-        public_url: t.public_url.clone(),
-        status: "Active".to_string(),
-    }).collect()
+    tunnels
+        .values()
+        .map(|t| TunnelInfo {
+            local_port: t.local_port,
+            public_url: t.public_url.clone(),
+            status: "Active".to_string(),
+        })
+        .collect()
 }

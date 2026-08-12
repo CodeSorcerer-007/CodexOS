@@ -1,7 +1,7 @@
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use std::io::{Read, Write};
-use portable_pty::{CommandBuilder, native_pty_system, PtySize};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 const MAX_BUFFER_LINES: usize = 200;
@@ -50,15 +50,17 @@ pub fn start_multiplex_pty(
     shell: Option<String>,
     cwd: Option<String>,
     app_handle: tauri::AppHandle,
-    state: tauri::State<'_, MultiPtyState>
+    state: tauri::State<'_, MultiPtyState>,
 ) -> Result<(), String> {
     let pty_system = native_pty_system();
-    let pair = pty_system.openpty(PtySize {
-        rows: 24,
-        cols: 80,
-        pixel_width: 0,
-        pixel_height: 0,
-    }).map_err(|e| e.to_string())?;
+    let pair = pty_system
+        .openpty(PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| e.to_string())?;
 
     let default_shell = if let Some(s) = shell {
         if s == "cmd" {
@@ -85,7 +87,11 @@ pub fn start_multiplex_pty(
 
     state.writers.lock().unwrap().insert(id.clone(), writer);
     state.children.lock().unwrap().insert(id.clone(), child);
-    state.output_buffers.lock().unwrap().insert(id.clone(), Vec::new());
+    state
+        .output_buffers
+        .lock()
+        .unwrap()
+        .insert(id.clone(), Vec::new());
 
     let id_clone = id.clone();
     let buffers = Arc::clone(&state.output_buffers);
@@ -96,7 +102,9 @@ pub fn start_multiplex_pty(
         use tauri::Emitter;
         let mut buf = [0u8; 1024];
         while let Ok(n) = reader.read(&mut buf) {
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             let s = String::from_utf8_lossy(&buf[..n]).to_string();
             append_to_buffer(&buffers, &id_clone, &s);
             let _ = app_handle.emit(&format!("pty-output-{}", id_clone), s);
@@ -105,7 +113,11 @@ pub fn start_multiplex_pty(
         let exit_code = {
             let mut children_guard = children.lock().unwrap();
             if let Some(mut child) = children_guard.remove(&id_clone) {
-                child.wait().ok().map(|s| s.exit_code() as i32).unwrap_or(-1)
+                child
+                    .wait()
+                    .ok()
+                    .map(|s| s.exit_code() as i32)
+                    .unwrap_or(-1)
             } else {
                 -1
             }
@@ -121,10 +133,12 @@ pub fn start_multiplex_pty(
 pub fn write_multiplex_pty(
     id: String,
     data: String,
-    state: tauri::State<'_, MultiPtyState>
+    state: tauri::State<'_, MultiPtyState>,
 ) -> Result<(), String> {
     if let Some(writer) = state.writers.lock().unwrap().get_mut(&id) {
-        writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+        writer
+            .write_all(data.as_bytes())
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -132,7 +146,7 @@ pub fn write_multiplex_pty(
 #[tauri::command]
 pub fn kill_multiplex_pty(
     id: String,
-    state: tauri::State<'_, MultiPtyState>
+    state: tauri::State<'_, MultiPtyState>,
 ) -> Result<(), String> {
     if let Some(mut child) = state.children.lock().unwrap().remove(&id) {
         let _ = child.kill();

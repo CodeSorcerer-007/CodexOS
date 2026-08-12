@@ -5,7 +5,8 @@ fn validate_connection(connection: &str) -> Result<(), String> {
     if trimmed.starts_with('-') {
         return Err("Invalid SSH connection string: Flags are not permitted.".to_string());
     }
-    if trimmed.is_empty() || trimmed.contains(|c: char| c.is_whitespace() || ";|&$`<>".contains(c)) {
+    if trimmed.is_empty() || trimmed.contains(|c: char| c.is_whitespace() || ";|&$`<>".contains(c))
+    {
         return Err("Invalid SSH connection target format.".to_string());
     }
     Ok(())
@@ -36,8 +37,10 @@ pub fn ssh_list_dir(connection: String, path: String) -> Result<Vec<FileInfo>, S
     let mut files = Vec::new();
 
     for line in stdout.lines() {
-        if line.is_empty() { continue; }
-        
+        if line.is_empty() {
+            continue;
+        }
+
         let parts: Vec<&str> = line.splitn(3, '|').collect();
         if parts.len() == 3 {
             let file_type = parts[0];
@@ -50,7 +53,7 @@ pub fn ssh_list_dir(connection: String, path: String) -> Result<Vec<FileInfo>, S
 
             let is_dir = file_type == "d";
             let size_bytes = size_str.parse::<u64>().unwrap_or(0);
-            
+
             let full_path = if path.ends_with('/') {
                 format!("{}{}", path, name)
             } else {
@@ -65,8 +68,12 @@ pub fn ssh_list_dir(connection: String, path: String) -> Result<Vec<FileInfo>, S
             });
         }
     }
-    
-    files.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.to_lowercase().cmp(&b.name.to_lowercase())));
+
+    files.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
 
     Ok(files)
 }
@@ -92,10 +99,14 @@ pub fn ssh_read_file_text(connection: String, path: String) -> Result<String, St
 }
 
 #[tauri::command]
-pub fn ssh_write_file_text(connection: String, path: String, content: String) -> Result<(), String> {
+pub fn ssh_write_file_text(
+    connection: String,
+    path: String,
+    content: String,
+) -> Result<(), String> {
     validate_connection(&connection)?;
     let safe_path = escape_shell_arg(&path);
-    
+
     // We can pipe content to ssh command
     use std::io::Write;
     let mut child = std::process::Command::new("ssh")
@@ -108,10 +119,14 @@ pub fn ssh_write_file_text(connection: String, path: String, content: String) ->
         .map_err(|e| format!("Failed to execute ssh: {}", e))?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(content.as_bytes()).map_err(|e| format!("Failed to write to stdin: {}", e))?;
+        stdin
+            .write_all(content.as_bytes())
+            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
     }
 
-    let output = child.wait_with_output().map_err(|e| format!("Failed to wait for ssh: {}", e))?;
+    let output = child
+        .wait_with_output()
+        .map_err(|e| format!("Failed to wait for ssh: {}", e))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);

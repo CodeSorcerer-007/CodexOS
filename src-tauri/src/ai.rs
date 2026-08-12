@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
 use crate::multiplexer::MultiPtyState;
@@ -159,7 +159,11 @@ fn trigger_kind(trigger: &DiagnosticTrigger) -> TriggerKind {
 
 fn cache_key(trigger: &DiagnosticTrigger) -> String {
     match trigger {
-        DiagnosticTrigger::TerminalError { session_id, exit_code, .. } => {
+        DiagnosticTrigger::TerminalError {
+            session_id,
+            exit_code,
+            ..
+        } => {
             format!("terminal:{}:{}", session_id, exit_code)
         }
         DiagnosticTrigger::MemorySpike { process_name, .. } => {
@@ -191,7 +195,9 @@ struct ContextBundle {
 
 impl ContextBundle {
     fn new() -> Self {
-        Self { sections: Vec::new() }
+        Self {
+            sections: Vec::new(),
+        }
     }
 
     fn push(&mut self, label: &str, content: String) {
@@ -206,7 +212,9 @@ impl ContextBundle {
 
         // Truncate oldest terminal lines first when over budget
         while total > MAX_CONTEXT_CHARS {
-            if let Some((label, content)) = sections.iter_mut().find(|(l, _)| l == "Terminal Output") {
+            if let Some((label, content)) =
+                sections.iter_mut().find(|(l, _)| l == "Terminal Output")
+            {
                 let lines: Vec<&str> = content.lines().collect();
                 if lines.len() <= 1 {
                     break;
@@ -283,29 +291,27 @@ async fn gather_context(
                     "System memory: {} MB used / {} MB total\nCPU: {:.1}%",
                     sys.used_memory() / 1024 / 1024,
                     sys.total_memory() / 1024 / 1024,
-                    sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>()
-                        / sys.cpus().len() as f32
+                    sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32
                 );
                 sys.refresh_processes();
                 let mut procs: Vec<(String, u32, u64)> = sys
                     .processes()
                     .iter()
-                    .map(|(pid, proc)| {
-                        (proc.name().to_string(), pid.as_u32(), proc.memory())
-                    })
+                    .map(|(pid, proc)| (proc.name().to_string(), pid.as_u32(), proc.memory()))
                     .collect();
                 // Sort descending by memory so "top 10" is actually the top 10.
                 procs.sort_by_key(|(_, _, mem)| std::cmp::Reverse(*mem));
                 let top = procs
                     .into_iter()
                     .take(10)
-                    .map(|(name, pid, mem)| {
-                        format!("{} (PID {}) — {} MB", name, pid, mem / 1024)
-                    })
+                    .map(|(name, pid, mem)| format!("{} (PID {}) — {} MB", name, pid, mem / 1024))
                     .collect::<Vec<_>>()
                     .join("\n");
                 (stats, top)
-            }).await.map_err(|e| format!("Spawn blocking error: {}", e)).unwrap_or_default();
+            })
+            .await
+            .map_err(|e| format!("Spawn blocking error: {}", e))
+            .unwrap_or_default();
             ctx.push("System Stats", stats);
             ctx.push("Top Processes", top);
         }
@@ -430,7 +436,11 @@ async fn call_mistral(api_key: &str, context: &str) -> Result<Diagnosis, String>
         if status.as_u16() == 429 {
             return Err("Rate limited by Mistral API".to_string());
         }
-        return Err(format!("API returned status {} — {}", status, body.chars().take(200).collect::<String>()));
+        return Err(format!(
+            "API returned status {} — {}",
+            status,
+            body.chars().take(200).collect::<String>()
+        ));
     }
 
     let mistral_res: MistralResponse = res
@@ -486,13 +496,7 @@ pub async fn diagnose_issue(
         last.insert(kind, Instant::now());
     }
 
-    let ctx = gather_context(
-        &trigger,
-        &app,
-        &pty_state,
-        &sys_state,
-        repo_path.as_deref(),
-    ).await;
+    let ctx = gather_context(&trigger, &app, &pty_state, &sys_state, repo_path.as_deref()).await;
     let context_str = ctx.to_prompt();
 
     if context_str.trim().is_empty() {
@@ -660,8 +664,8 @@ mod tests {
     /// Strategy that generates an arbitrary TerminalError trigger.
     fn arb_terminal_error() -> impl Strategy<Value = DiagnosticTrigger> {
         (
-            "[a-z0-9]{1,32}",  // session_id — non-empty alphanumeric
-            any::<i32>(),       // exit_code
+            "[a-z0-9]{1,32}", // session_id — non-empty alphanumeric
+            any::<i32>(),     // exit_code
         )
             .prop_map(|(session_id, exit_code)| DiagnosticTrigger::TerminalError {
                 session_id,
@@ -673,9 +677,9 @@ mod tests {
     /// Strategy that generates an arbitrary MemorySpike trigger.
     fn arb_memory_spike() -> impl Strategy<Value = DiagnosticTrigger> {
         (
-            "[a-z][a-z0-9]{0,31}",   // process_name — non-empty
-            0.0_f64..10_000.0_f64,   // delta_mb
-            0.0_f64..10_000.0_f64,   // threshold_mb
+            "[a-z][a-z0-9]{0,31}", // process_name — non-empty
+            0.0_f64..10_000.0_f64, // delta_mb
+            0.0_f64..10_000.0_f64, // threshold_mb
         )
             .prop_map(|(process_name, delta_mb, threshold_mb)| {
                 DiagnosticTrigger::MemorySpike {
@@ -689,10 +693,10 @@ mod tests {
     /// Strategy that generates an arbitrary ProxyError trigger.
     fn arb_proxy_error() -> impl Strategy<Value = DiagnosticTrigger> {
         (
-            any::<u64>(),            // request_id
-            400_u16..=599_u16,       // status_code
-            "[a-z]{1,16}",           // url
-            "[A-Z]{3,6}",            // method
+            any::<u64>(),      // request_id
+            400_u16..=599_u16, // status_code
+            "[a-z]{1,16}",     // url
+            "[A-Z]{3,6}",      // method
         )
             .prop_map(|(request_id, status_code, url, method)| {
                 DiagnosticTrigger::ProxyError {
@@ -706,11 +710,7 @@ mod tests {
 
     /// Generates any one of the three trigger variants.
     fn arb_trigger() -> impl Strategy<Value = DiagnosticTrigger> {
-        prop_oneof![
-            arb_terminal_error(),
-            arb_memory_spike(),
-            arb_proxy_error(),
-        ]
+        prop_oneof![arb_terminal_error(), arb_memory_spike(), arb_proxy_error(),]
     }
 
     proptest! {

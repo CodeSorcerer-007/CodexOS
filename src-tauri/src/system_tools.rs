@@ -9,7 +9,7 @@ pub fn detect_tool(tool: String) -> String {
         "node" => vec!["--version"],
         _ => return String::new(),
     };
-    
+
     std::process::Command::new(&tool)
         .args(args)
         .output()
@@ -35,10 +35,13 @@ pub struct WindowsService {
 #[tauri::command]
 pub fn get_env_vars() -> Result<std::collections::HashMap<String, String>, String> {
     let output = std::process::Command::new("powershell")
-        .args(["-Command", "[Environment]::GetEnvironmentVariables('User') | ConvertTo-Json"])
+        .args([
+            "-Command",
+            "[Environment]::GetEnvironmentVariables('User') | ConvertTo-Json",
+        ])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     let json_str = String::from_utf8_lossy(&output.stdout);
     serde_json::from_str(&json_str).map_err(|e| e.to_string())
 }
@@ -48,14 +51,17 @@ pub fn set_env_var(name: String, value: String) -> Result<(), String> {
     let output = std::process::Command::new("powershell")
         .env("NEW_ENV_NAME", &name)
         .env("NEW_ENV_VAL", &value)
-        .args(["-Command", "[Environment]::SetEnvironmentVariable($env:NEW_ENV_NAME, $env:NEW_ENV_VAL, 'User')"])
+        .args([
+            "-Command",
+            "[Environment]::SetEnvironmentVariable($env:NEW_ENV_NAME, $env:NEW_ENV_VAL, 'User')",
+        ])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
-    
+
     Ok(())
 }
 
@@ -63,14 +69,17 @@ pub fn set_env_var(name: String, value: String) -> Result<(), String> {
 pub fn delete_env_var(name: String) -> Result<(), String> {
     let output = std::process::Command::new("powershell")
         .env("DEL_ENV_NAME", &name)
-        .args(["-Command", "[Environment]::SetEnvironmentVariable($env:DEL_ENV_NAME, $null, 'User')"])
+        .args([
+            "-Command",
+            "[Environment]::SetEnvironmentVariable($env:DEL_ENV_NAME, $null, 'User')",
+        ])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
-    
+
     Ok(())
 }
 
@@ -81,7 +90,7 @@ pub fn get_services() -> Result<Vec<WindowsService>, String> {
         .args(["-NoProfile", "-Command", script])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     let json_str = String::from_utf8_lossy(&output.stdout);
     serde_json::from_str(&json_str).map_err(|e| e.to_string())
 }
@@ -94,15 +103,18 @@ pub fn manage_service(name: String, action: String) -> Result<(), String> {
         .args(["-NoProfile", "-Command", &script])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr).to_string();
         if err.contains("Access is denied") || err.contains("Cannot open") {
-            return Err("Access Denied: You must run CodexOS as Administrator to modify this service.".to_string());
+            return Err(
+                "Access Denied: You must run CodexOS as Administrator to modify this service."
+                    .to_string(),
+            );
         }
         return Err(err);
     }
-    
+
     Ok(())
 }
 
@@ -113,7 +125,7 @@ pub fn list_wsl_distros() -> Result<Vec<String>, String> {
         .args(["-NoProfile", "-Command", script])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     let distros_str = String::from_utf8_lossy(&output.stdout);
     let mut distros = Vec::new();
     for line in distros_str.lines() {
@@ -126,7 +138,9 @@ pub fn list_wsl_distros() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn get_project_tasks(path: String) -> Result<std::collections::HashMap<String, String>, String> {
+pub fn get_project_tasks(
+    path: String,
+) -> Result<std::collections::HashMap<String, String>, String> {
     let pkg_path = std::path::Path::new(&path).join("package.json");
     if pkg_path.exists() {
         let content = std::fs::read_to_string(pkg_path).map_err(|e| e.to_string())?;
@@ -142,7 +156,7 @@ pub fn get_project_tasks(path: String) -> Result<std::collections::HashMap<Strin
             }
         }
     }
-    
+
     Ok(std::collections::HashMap::new())
 }
 
@@ -166,22 +180,22 @@ pub fn write_hosts(content: String) -> Result<(), String> {
     if std::fs::write(path, &content).is_ok() {
         return Ok(());
     }
-    
+
     if cfg!(target_os = "windows") {
         let temp_path = std::env::temp_dir().join("codexos_hosts_tmp.txt");
         std::fs::write(&temp_path, &content).map_err(|e| e.to_string())?;
-        
+
         let script = format!(
             "Start-Process powershell -ArgumentList '-NoProfile -Command Copy-Item -Path \"{}\" -Destination \"{}\" -Force' -Verb RunAs -WindowStyle Hidden -Wait",
             temp_path.to_string_lossy(),
             path
         );
-        
+
         let status = std::process::Command::new("powershell")
             .args(["-NoProfile", "-Command", &script])
             .status()
             .map_err(|e| e.to_string())?;
-            
+
         if status.success() {
             Ok(())
         } else {
@@ -203,11 +217,11 @@ pub fn install_font(path: String) -> Result<String, String> {
         .args(["-NoProfile", "-Command", &script])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).to_string());
     }
-    
+
     Ok("Font installed successfully".to_string())
 }
 

@@ -1,22 +1,22 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::fs;
 use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
+use std::sync::Mutex;
 
-use argon2::{Argon2};
 use argon2::password_hash::{rand_core::OsRng, SaltString};
+use argon2::Argon2;
 use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng as ChaChaRng},
-    ChaCha20Poly1305, Nonce
+    ChaCha20Poly1305, Nonce,
 };
-use zeroize::Zeroizing;
 use tauri::{AppHandle, Manager};
+use zeroize::Zeroizing;
 
 #[derive(Serialize, Deserialize)]
 struct EncryptedVault {
     salt: String,
-    nonce: String, // hex
+    nonce: String,      // hex
     ciphertext: String, // hex
 }
 
@@ -44,19 +44,26 @@ impl SecretsState {
 fn derive_key(password: &str, salt: &SaltString) -> Result<Zeroizing<Vec<u8>>, String> {
     let mut key = Zeroizing::new(vec![0u8; 32]);
     let argon2 = Argon2::default();
-    let _ = argon2.hash_password_into(password.as_bytes(), salt.as_str().as_bytes(), &mut key)
+    let _ = argon2
+        .hash_password_into(password.as_bytes(), salt.as_str().as_bytes(), &mut key)
         .map_err(|e| format!("Argon2 error: {}", e))?;
     Ok(key)
 }
 
 fn vault_path(app: &AppHandle) -> PathBuf {
-    let mut path = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut path = app
+        .path()
+        .app_data_dir()
+        .unwrap_or_else(|_| PathBuf::from("."));
     path.push("secrets_vault.json");
     path
 }
 
 fn ensure_vault_dir(app: &AppHandle) -> Result<(), String> {
-    let path = app.path().app_data_dir().map_err(|e| format!("App data dir error: {}", e))?;
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("App data dir error: {}", e))?;
     if !path.exists() {
         fs::create_dir_all(&path).map_err(|e| format!("Failed to create app data dir: {}", e))?;
     }
@@ -80,7 +87,10 @@ pub fn unlock_vault(
         if attempts >= 3 {
             if let Some(last) = *state.last_failed_attempt.lock().unwrap() {
                 if last.elapsed().as_secs() < 5 {
-                    return Err("Vault locked due to multiple failed attempts. Please wait 5 seconds.".to_string());
+                    return Err(
+                        "Vault locked due to multiple failed attempts. Please wait 5 seconds."
+                            .to_string(),
+                    );
                 }
             }
         }
@@ -91,41 +101,44 @@ pub fn unlock_vault(
         // Init new vault
         let salt = SaltString::generate(&mut OsRng);
         let key = derive_key(&password, &salt)?;
-        
+
         let cipher = ChaCha20Poly1305::new(chacha20poly1305::Key::from_slice(&key));
         let nonce = ChaCha20Poly1305::generate_nonce(&mut ChaChaRng);
-        
+
         let empty_cache: HashMap<String, String> = HashMap::new();
-        let data = serde_json::to_vec(&empty_cache).map_err(|e| format!("Serialize error: {}", e))?;
-        
-        let ciphertext = cipher.encrypt(&nonce, data.as_ref())
+        let data =
+            serde_json::to_vec(&empty_cache).map_err(|e| format!("Serialize error: {}", e))?;
+
+        let ciphertext = cipher
+            .encrypt(&nonce, data.as_ref())
             .map_err(|e| format!("Encrypt error: {}", e))?;
-        
+
         let vault = EncryptedVault {
             salt: salt.to_string(),
             nonce: hex::encode(nonce),
             ciphertext: hex::encode(ciphertext),
         };
         ensure_vault_dir(&app)?;
-        let vault_json = serde_json::to_string(&vault).map_err(|e| format!("Serialize vault error: {}", e))?;
+        let vault_json =
+            serde_json::to_string(&vault).map_err(|e| format!("Serialize vault error: {}", e))?;
         fs::write(&path, vault_json).map_err(|e| format!("Failed to write vault: {}", e))?;
-        
+
         *state.master_key.lock().unwrap() = Some(key);
         return Ok(true);
     }
-    
+
     // Read existing
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let vault: EncryptedVault = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    
+
     let salt = SaltString::from_b64(&vault.salt).map_err(|e| e.to_string())?;
     let key = derive_key(&password, &salt)?;
-    
+
     let cipher = ChaCha20Poly1305::new(chacha20poly1305::Key::from_slice(&key));
     let nonce_bytes = hex::decode(&vault.nonce).map_err(|e| e.to_string())?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let cipher_bytes = hex::decode(&vault.ciphertext).map_err(|e| e.to_string())?;
-    
+
     match cipher.decrypt(nonce, cipher_bytes.as_ref()) {
         Ok(pt) => {
             let map: HashMap<String, String> = serde_json::from_slice(&pt).map_err(|e| {
@@ -162,22 +175,25 @@ pub fn lock_vault(state: tauri::State<'_, SecretsState>) -> Result<(), String> {
 fn save_vault(app: &AppHandle, state: &SecretsState) -> Result<(), String> {
     let mk_guard = state.master_key.lock().unwrap();
     let mk = mk_guard.as_ref().ok_or("Vault is locked")?;
-    
+
     let path = vault_path(app);
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let mut vault: EncryptedVault = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    
+
     let cipher = ChaCha20Poly1305::new(chacha20poly1305::Key::from_slice(mk));
     let nonce = ChaCha20Poly1305::generate_nonce(&mut ChaChaRng);
-    
+
     let map = state.cache.lock().unwrap().clone();
     let pt = serde_json::to_vec(&map).map_err(|e| format!("Serialize cache error: {}", e))?;
-    let ciphertext = cipher.encrypt(&nonce, pt.as_ref()).map_err(|e| e.to_string())?;
-    
+    let ciphertext = cipher
+        .encrypt(&nonce, pt.as_ref())
+        .map_err(|e| e.to_string())?;
+
     vault.nonce = hex::encode(nonce);
     vault.ciphertext = hex::encode(ciphertext);
-    
-    let vault_json = serde_json::to_string(&vault).map_err(|e| format!("Serialize vault error: {}", e))?;
+
+    let vault_json =
+        serde_json::to_string(&vault).map_err(|e| format!("Serialize vault error: {}", e))?;
     fs::write(&path, vault_json).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -195,16 +211,16 @@ pub fn add_secret(
     if !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return Err("Key name must be alphanumeric with underscores only".to_string());
     }
-    
+
     state.cache.lock().unwrap().insert(key.clone(), value);
-    
+
     let mut keys = state.known_keys.lock().unwrap();
     if !keys.contains(&key) {
         keys.push(key.clone());
     }
     drop(keys);
     save_vault(&app, &state)?;
-    
+
     Ok(())
 }
 
@@ -238,14 +254,14 @@ pub fn remove_secret(
     if state.master_key.lock().unwrap().is_none() {
         return Err("Vault is locked".to_string());
     }
-    
+
     state.cache.lock().unwrap().remove(&key);
-    
+
     let mut keys = state.known_keys.lock().unwrap();
     keys.retain(|k| k != &key);
     drop(keys);
     save_vault(&app, &state)?;
-    
+
     Ok(())
 }
 
@@ -266,7 +282,10 @@ pub fn run_with_secrets(
         if let Some(val) = cache.get(key) {
             envs.insert(key.clone(), val.clone());
         } else {
-            return Err(format!("Required secret '{}' is missing from the vault.", key));
+            return Err(format!(
+                "Required secret '{}' is missing from the vault.",
+                key
+            ));
         }
     }
     drop(cache);
@@ -277,8 +296,7 @@ pub fn run_with_secrets(
     //
     // We use a minimal whitespace tokeniser: single/double-quoted spans are
     // preserved as single tokens; outside quotes, whitespace is the delimiter.
-    let argv = split_command_args(&cmd)
-        .map_err(|e| format!("Invalid command syntax: {}", e))?;
+    let argv = split_command_args(&cmd).map_err(|e| format!("Invalid command syntax: {}", e))?;
 
     if argv.is_empty() {
         return Err("Command must not be empty".to_string());
@@ -331,29 +349,27 @@ fn split_command_args(input: &str) -> Result<Vec<String>, String> {
     while let Some(ch) = chars.next() {
         match ch {
             // Single-quoted span — take everything verbatim until closing '
-            '\'' => {
-                loop {
-                    match chars.next() {
-                        Some('\'') => break,
-                        Some(c) => current.push(c),
-                        None => return Err("Unterminated single-quoted string".to_string()),
-                    }
+            '\'' => loop {
+                match chars.next() {
+                    Some('\'') => break,
+                    Some(c) => current.push(c),
+                    None => return Err("Unterminated single-quoted string".to_string()),
                 }
-            }
+            },
             // Double-quoted span — honour \" and \\ escape sequences
-            '"' => {
-                loop {
-                    match chars.next() {
-                        Some('"') => break,
-                        Some('\\') => match chars.next() {
-                            Some(escaped) => current.push(escaped),
-                            None => return Err("Unterminated escape in double-quoted string".to_string()),
-                        },
-                        Some(c) => current.push(c),
-                        None => return Err("Unterminated double-quoted string".to_string()),
-                    }
+            '"' => loop {
+                match chars.next() {
+                    Some('"') => break,
+                    Some('\\') => match chars.next() {
+                        Some(escaped) => current.push(escaped),
+                        None => {
+                            return Err("Unterminated escape in double-quoted string".to_string())
+                        }
+                    },
+                    Some(c) => current.push(c),
+                    None => return Err("Unterminated double-quoted string".to_string()),
                 }
-            }
+            },
             // Unquoted whitespace — flush current token
             c if c.is_whitespace() => {
                 if !current.is_empty() {

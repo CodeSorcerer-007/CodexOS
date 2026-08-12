@@ -1,31 +1,31 @@
 use std::sync::Mutex;
 use sysinfo::System;
 
-mod vault;
+mod ai;
 mod db;
 mod devdocs;
 mod multiplexer;
-mod proxy;
 mod plugin;
-mod zkp;
+mod proxy;
 mod secrets;
-mod tunnel;
 mod sys;
-mod ai;
+mod tunnel;
+mod vault;
+mod zkp;
 
-pub mod files;
-pub mod git;
-pub mod docker;
-pub mod ports;
-pub mod system_tools;
 pub mod archive;
 pub mod crypto_tools;
+pub mod docker;
+pub mod files;
+pub mod git;
+pub mod ports;
 pub mod ssh;
+pub mod system_tools;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let sys = System::new();
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(ports::TailState {
@@ -163,6 +163,5 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, _event| {
-        });
+        .run(|_app_handle, _event| {});
 }

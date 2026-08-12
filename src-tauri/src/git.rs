@@ -18,17 +18,17 @@ pub struct GitStatusResult {
 #[tauri::command]
 pub fn get_git_status(path: String) -> Result<GitStatusResult, String> {
     use std::process::Command;
-    
+
     let mut staged = Vec::new();
     let mut unstaged = Vec::new();
     let mut untracked = Vec::new();
-    
+
     let output = Command::new("git")
         .current_dir(&path)
         .args(["status", "--porcelain"])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
@@ -54,32 +54,48 @@ pub fn get_git_status(path: String) -> Result<GitStatusResult, String> {
         .current_dir(&path)
         .args(["branch", "--show-current"])
         .output();
-        
+
     let branch = if let Ok(out) = branch_output {
         String::from_utf8_lossy(&out.stdout).trim().to_string()
     } else {
         "unknown".to_string()
     };
-    
-    Ok(GitStatusResult { staged, unstaged, untracked, branch })
+
+    Ok(GitStatusResult {
+        staged,
+        unstaged,
+        untracked,
+        branch,
+    })
 }
 
 #[tauri::command]
-pub fn git_action(path: String, action: String, file: String, message: String) -> Result<String, String> {
+pub fn git_action(
+    path: String,
+    action: String,
+    file: String,
+    message: String,
+) -> Result<String, String> {
     use std::process::Command;
-    
+
     let mut cmd = Command::new("git");
     cmd.current_dir(&path);
-    
+
     match action.as_str() {
-        "add" => { cmd.args(["add", &file]); },
-        "commit" => { cmd.args(["commit", "-m", &message]); },
-        "push" => { cmd.args(["push"]); },
+        "add" => {
+            cmd.args(["add", &file]);
+        }
+        "commit" => {
+            cmd.args(["commit", "-m", &message]);
+        }
+        "push" => {
+            cmd.args(["push"]);
+        }
         _ => return Err("Invalid git action".to_string()),
     }
-    
+
     let output = cmd.output().map_err(|e| e.to_string())?;
-    
+
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
@@ -90,13 +106,19 @@ pub fn git_action(path: String, action: String, file: String, message: String) -
 #[tauri::command]
 pub fn git_history(path: String, file: String) -> Result<Vec<GitCommitInfo>, String> {
     use std::process::Command;
-    
+
     let output = Command::new("git")
         .current_dir(path)
-        .args(["log", "--pretty=format:%H|%s|%cd", "--date=short", "--", &file])
+        .args([
+            "log",
+            "--pretty=format:%H|%s|%cd",
+            "--date=short",
+            "--",
+            &file,
+        ])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     let mut history = Vec::new();
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -117,13 +139,13 @@ pub fn git_history(path: String, file: String) -> Result<Vec<GitCommitInfo>, Str
 #[tauri::command]
 pub fn git_show(path: String, hash: String, file: String) -> Result<String, String> {
     use std::process::Command;
-    
+
     let output = Command::new("git")
         .current_dir(path)
         .args(["show", &format!("{}:{}", hash, file)])
         .output()
         .map_err(|e| e.to_string())?;
-        
+
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
@@ -132,16 +154,19 @@ pub fn git_show(path: String, hash: String, file: String) -> Result<String, Stri
 }
 
 #[tauri::command]
-pub fn search_contents(path: String, query: String) -> Result<Vec<crate::files::SearchResult>, String> {
+pub fn search_contents(
+    path: String,
+    query: String,
+) -> Result<Vec<crate::files::SearchResult>, String> {
     use std::process::Command;
     let mut results = Vec::new();
-    
+
     let output = Command::new("rg")
         .current_dir(path)
         .args(["--no-heading", "-n", &query])
         .output()
         .map_err(|e| format!("Ripgrep failed to execute (is it installed?): {}", e))?;
-        
+
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
@@ -173,10 +198,14 @@ pub fn get_branches(path: String) -> Result<Vec<BranchInfo>, String> {
     use std::process::Command;
     let output = Command::new("git")
         .current_dir(&path)
-        .args(["branch", "-a", "--format=%(refname:short)|%(objectname:short)|%(HEAD)"])
+        .args([
+            "branch",
+            "-a",
+            "--format=%(refname:short)|%(objectname:short)|%(HEAD)",
+        ])
         .output()
         .map_err(|e| e.to_string())?;
-    
+
     let mut branches = Vec::new();
     let stdout = String::from_utf8_lossy(&output.stdout);
     for line in stdout.lines() {
@@ -329,7 +358,11 @@ pub fn get_staged_diff(path: String, file: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn git_clone(url: String, destination: String, app_handle: tauri::AppHandle) -> Result<(), String> {
+pub fn git_clone(
+    url: String,
+    destination: String,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
     use std::process::Command;
     use tauri::Emitter;
     std::thread::spawn(move || {
@@ -338,15 +371,18 @@ pub fn git_clone(url: String, destination: String, app_handle: tauri::AppHandle)
             .args(["clone", "--progress", &url, &destination])
             .stderr(std::process::Stdio::piped())
             .spawn();
-            
+
         let mut child = match child_res {
             Ok(child) => child,
             Err(e) => {
-                let _ = app_handle.emit("git-progress", format!("Error: Failed to execute git: {}", e));
+                let _ = app_handle.emit(
+                    "git-progress",
+                    format!("Error: Failed to execute git: {}", e),
+                );
                 return;
             }
         };
-        
+
         if let Some(stderr) = child.stderr.take() {
             let reader = BufReader::new(stderr);
             for line in reader.lines().map_while(Result::ok) {
