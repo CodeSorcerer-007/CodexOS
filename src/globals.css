@@ -1,31 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --color-cyan: rgb(var(--accent-cyan));
   --color-panel: var(--bg-panel);
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --color-vault-bg: #06080F;
+  --color-vault-card: #0B0F19;
+  --color-vault-border: rgba(255, 255, 255, 0.08);
+  --color-vault-accent: #00E5FF;
+  --color-vault-accent-glow: rgba(0, 229, 255, 0.2);
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
 }
 
 @layer base {
   :root {
-    /* Base Colors */
-    --bg-base: 13 15 18; /* #0D0F12 */
+    /* Dark theme (default) */
+    --bg-base: 13 15 18;
     --bg-glass: rgba(13, 15, 18, 0.4);
     --bg-panel: rgba(21, 24, 28, 0.6);
-    
-    /* Accents */
-    --accent-cyan: 0 229 255; /* #00E5FF */
-    
-    /* Typography */
     --text-primary: 255 255 255;
     --text-secondary: 160 170 181;
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --accent-cyan: 0 229 255;
+    color-scheme: dark;
+  }
+
+  /* Light theme — full token swap with WCAG AAA compliant secondary text contrast */
+  .light-theme {
+    --bg-base: 245 247 250;
+    --bg-glass: rgba(255, 255, 255, 0.7);
+    --bg-panel: rgba(255, 255, 255, 0.85);
+    --text-primary: 15 23 42;
+    --text-secondary: 51 65 85;
+    --border-subtle: rgba(0, 0, 0, 0.08);
+    --accent-cyan: 6 182 212;
+    --color-vault-bg: #F8FAFC;
+    --color-vault-card: #FFFFFF;
+    --color-vault-border: rgba(0, 0, 0, 0.08);
+    color-scheme: light;
   }
 
   body {
-    background-color: rgb(13, 15, 18);
-    color: rgb(var(--text-primary));
-    font-family: 'Inter', sans-serif;
+    margin: 0;
+    font-family: var(--font-sans);
+    background-color: var(--color-vault-bg);
+    color: #E2E8F0;
+    overflow: hidden;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-vault-accent, #00E5FF);
+    outline-offset: 2px;
   }
 }
 
@@ -38,6 +64,23 @@
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
   }
   
+  .premium-card {
+    background: rgba(15, 20, 35, 0.5);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.4);
+  }
+
+  .premium-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.5), 0 0 15px var(--color-vault-accent-glow);
+  }
+
   .neon-glow {
     box-shadow: 0 0 15px rgba(var(--accent-cyan), 0.4), 
                 0 0 30px rgba(var(--accent-cyan), 0.2);
@@ -51,5 +94,73 @@
     background: radial-gradient(circle at 15% 50%, rgba(var(--accent-cyan), 0.08), transparent 25%),
                 radial-gradient(circle at 85% 30%, rgba(20, 40, 80, 0.2), transparent 30%);
     background-attachment: fixed;
+  }
+  
+  /* Custom Scrollbar for sleekness */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  /* Modern Webkit Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* Global un-scoped scrollbar as fallback */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+::selection {
+  background: var(--color-vault-accent-glow);
+  color: #fff;
+}
+
+/* Responsive Sidebar Collapse */
+@media (max-width: 1024px) {
+  nav[aria-label="Main navigation"] {
+    width: 4rem !important; /* Force collapse */
+  }
+  nav[aria-label="Main navigation"] span {
+    display: none !important;
+  }
+}
+
+/* Accessibility: Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

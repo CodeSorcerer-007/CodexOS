@@ -19,6 +19,7 @@ export const TerminalMultiplexer = () => {
   const [layout, setLayout] = useState<'1x1' | '1x2' | '2x1' | '2x2'>('1x1');
   const terminalShell = useStore(s => s.settings.terminalShell);
   const currentPath = useStore(s => s.currentPath);
+  const { error: toastError } = useToast();
 
   const splitVertical = () => {
     if (panes.length < 4) {
@@ -41,7 +42,7 @@ export const TerminalMultiplexer = () => {
     else if (panes.length === 3) setLayout('1x2'); // fallback
     
     invoke('kill_multiplex_pty', { id }).catch(e => {
-      useStore.getState().addToast({ type: 'error', title: 'Kill PTY Failed', message: String(e) });
+      toastError('Kill PTY Failed', String(e));
     });
   };
 
@@ -138,14 +139,24 @@ export const TerminalPane = ({ id, onClose, showClose, shell, cwd, command = nul
       // Start the PTY backend for this ID
       try {
         await invoke('start_multiplex_pty', { id, shell, command, cwd });
+        invoke('resize_multiplex_pty', { id, rows: term.rows, cols: term.cols }).catch(() => {});
       } catch (e: unknown) {
-        useStore.getState().addToast({ type: 'error', title: 'Start PTY Failed', message: String(e) });
+        toastError('Start PTY Failed', String(e));
       }
     };
 
     init();
 
-    const handleResize = () => fitAddon.fit();
+    term.onResize(({ rows, cols }) => {
+      invoke('resize_multiplex_pty', { id, rows, cols }).catch(() => {});
+    });
+
+    const handleResize = () => {
+      fitAddon.fit();
+      if (termRef.current) {
+        invoke('resize_multiplex_pty', { id, rows: termRef.current.rows, cols: termRef.current.cols }).catch(() => {});
+      }
+    };
     window.addEventListener('resize', handleResize);
 
     return () => {
@@ -157,8 +168,7 @@ export const TerminalPane = ({ id, onClose, showClose, shell, cwd, command = nul
       });
       term.dispose();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, shell]);
+  }, [id, shell, cwd, command, toastError]);
 
   return (
     <div className="relative border border-white/10 rounded overflow-hidden bg-black flex flex-col group">

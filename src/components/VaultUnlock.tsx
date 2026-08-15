@@ -87,6 +87,8 @@ export const VaultUnlock = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Master Password"
+                  autoComplete="new-password"
+                  spellCheck={false}
                   className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder:text-gray-600 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
                   autoFocus
                 />

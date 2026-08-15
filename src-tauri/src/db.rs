@@ -1,3 +1,4 @@
+use crate::error::AppResult;
 use serde_json::{Map, Value};
 use sqlx::{any::AnyPoolOptions, Column, Row, ValueRef};
 
@@ -50,6 +51,8 @@ pub async fn query_database(url: String, query: String) -> Result<Vec<Map<String
     Ok(result)
 }
 
+const MAX_SQLITE_ROWS: usize = 10_000;
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct SqliteResult {
     pub columns: Vec<String>,
@@ -57,10 +60,21 @@ pub struct SqliteResult {
 }
 
 #[tauri::command]
-pub fn query_sqlite(path: String, query: String) -> Result<SqliteResult, String> {
+pub fn query_sqlite(path: String, query: String) -> AppResult<SqliteResult> {
     use rusqlite::{types::ValueRef, Connection};
+    use std::path::Path;
 
-    let conn = Connection::open(path).map_err(|e| e.to_string())?;
+    if path != ":memory:" {
+        let p = Path::new(&path);
+        if !p.exists() || !p.is_file() {
+            return Err(crate::error::AppError::Custom(format!(
+                "SQLite database file not found: {}",
+                path
+            )));
+        }
+    }
+
+    let conn = Connection::open(&path).map_err(|e| e.to_string())?;
     let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
 
     let column_names: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
@@ -70,6 +84,9 @@ pub fn query_sqlite(path: String, query: String) -> Result<SqliteResult, String>
 
     let mut rows = stmt.query([]).map_err(|e| e.to_string())?;
     while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        if rows_data.len() >= MAX_SQLITE_ROWS {
+            break;
+        }
         let mut row_data = Vec::with_capacity(column_count);
         for i in 0..column_count {
             let val_ref = row.get_ref(i).map_err(|e| e.to_string())?;
@@ -89,4 +106,40 @@ pub fn query_sqlite(path: String, query: String) -> Result<SqliteResult, String>
         columns: column_names,
         rows: rows_data,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_query_sqlite_memory() {
+        let res = query_sqlite(
+            ":memory:".to_string(),
+            "SELECT 1 AS id, 'alice' AS name, NULL AS extra;".to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(res.columns, vec!["id", "name", "extra"]);
+        assert_eq!(res.rows.len(), 1);
+        assert_eq!(res.rows[0], vec!["1", "alice", "NULL"]);
+    }
+
+    #[test]
+    fn test_query_sqlite_syntax_error() {
+        let res = query_sqlite(
+            ":memory:".to_string(),
+            "INVALID SQL STATEMENT;".to_string(),
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_query_sqlite_non_existent_file() {
+        let res = query_sqlite(
+            "C:\\non_existent_path_12345\\db.sqlite".to_string(),
+            "SELECT 1;".to_string(),
+        );
+        assert!(res.is_err());
+    }
 }

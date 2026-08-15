@@ -5,21 +5,36 @@ import { invoke } from '@tauri-apps/api/core';
 export const Breadcrumb = () => {
   const currentPath = useStore(s => s.currentPath);
   const pushPath = useStore(s => s.pushPath);
-  const canGoBack = useStore(s => s.canGoBack);
-  const canGoForward = useStore(s => s.canGoForward);
+  const activeTabId = useStore(s => s.activeTabId);
+  const activeTab = useStore(s => s.tabs.find(t => t.id === activeTabId));
+  const canGoBack = activeTab ? activeTab.historyIndex > 0 : false;
+  const canGoForward = activeTab ? activeTab.historyIndex < activeTab.pathHistory.length - 1 : false;
   const goBack = useStore(s => s.goBack);
   const goForward = useStore(s => s.goForward);
   
   if (!currentPath) return null;
   
-  const segments = currentPath.replace(/\\/g, '/').split('/').filter(Boolean);
+  const isSsh = currentPath.startsWith('ssh://');
+  const isWindows = !isSsh && currentPath.includes(':');
+  
+  const rawPath = isSsh ? currentPath.replace('ssh://', '') : currentPath;
+  const segments = rawPath.replace(/\\/g, '/').split('/').filter(Boolean);
   
   const navigateTo = (index: number) => {
-    let newPath = segments.slice(0, index + 1).join('\\');
-    if (!newPath.includes(':')) {
-      newPath = '\\' + newPath;
+    if (isSsh) {
+      const host = segments[0];
+      const rest = segments.slice(1, index + 1).join('/');
+      pushPath(`ssh://${host}/${rest}`);
+      return;
     }
-    pushPath(newPath);
+
+    if (isWindows) {
+      const newPath = segments.slice(0, index + 1).join('\\');
+      pushPath(newPath);
+    } else {
+      const newPath = '/' + segments.slice(0, index + 1).join('/');
+      pushPath(newPath);
+    }
   };
   
   return (

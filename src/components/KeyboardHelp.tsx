@@ -24,10 +24,11 @@ export const KeyboardHelp = () => {
 
   const shortcuts = [
     { keys: 'Ctrl + 1-9', action: 'Navigate to Modules' },
+    { keys: 'Ctrl + K / Ctrl + Shift + P', action: 'Open Command Palette' },
+    { keys: 'Ctrl + S', action: 'Save File in Code Editor' },
     { keys: 'Ctrl + T', action: 'New Tab' },
     { keys: 'Ctrl + W', action: 'Close Current Tab' },
     { keys: 'Ctrl + ,', action: 'Open Settings' },
-    { keys: 'Ctrl + Shift + P', action: 'Open Command Palette (Files)' },
     { keys: 'Ctrl + Shift + ?', action: 'Show this Help Menu' },
   ];
 

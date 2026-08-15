@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useToast } from '../store/store';
+import { Copy, ShieldCheck, Key } from 'lucide-react';
 
-export const ZKPVault = () => {
+export const HMACVault = () => {
   const [vaultData, setVaultData] = useState('Secret Source Code 123');
   const [secretKey, setSecretKey] = useState('super_secret_key');
   const [proof, setProof] = useState<string | null>(null);
@@ -11,13 +12,18 @@ export const ZKPVault = () => {
   const [verifyData, setVerifyData] = useState('Secret Source Code 123');
   const [verifyKey, setVerifyKey] = useState('super_secret_key');
   const [isValid, setIsValid] = useState<boolean | null>(null);
-  const { error: toastError } = useToast();
+  const { error: toastError, success: toastSuccess } = useToast();
 
   const generateProof = async () => {
+    if (!secretKey.trim()) {
+      toastError('Missing Secret Key', 'Please provide a non-empty HMAC secret key.');
+      return;
+    }
     try {
       const p = await invoke<string>('generate_hmac_proof', { vaultData, secretKey });
       setProof(p);
       setVerifyProof(p);
+      toastSuccess('Proof Generated', 'Cryptographic HMAC proof generated successfully.');
     } catch (e: unknown) {
       console.error(e);
       toastError('HMAC Proof Generation Failed', e instanceof Error ? e.message : String(e));
@@ -32,6 +38,11 @@ export const ZKPVault = () => {
         secretKey: verifyKey 
       });
       setIsValid(valid);
+      if (valid) {
+        toastSuccess('Proof Valid', 'Cryptographic commitment matches expected data.');
+      } else {
+        toastError('Verification Failed', 'Proof does not match expected data or key.');
+      }
     } catch (e: unknown) {
       console.error(e);
       toastError('HMAC Verification Error', e instanceof Error ? e.message : String(e));
@@ -39,15 +50,22 @@ export const ZKPVault = () => {
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toastSuccess('Copied', 'Proof copied to clipboard.');
+  };
+
   return (
     <div className="flex h-full w-full bg-[#0a0f18] text-white">
       {/* Prover Section */}
       <div className="w-1/2 border-r border-white/10 p-6 flex flex-col gap-6">
         <div>
-          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">HMAC Proof Generator</h2>
+          <h2 className="font-bold text-fuchsia-400 text-xl mb-2 flex items-center gap-2">
+            <Key className="w-5 h-5" /> HMAC Proof Generator
+          </h2>
           <p className="text-sm text-gray-400 mb-4">Generate an HMAC-SHA256 proof that you possess data with a given key.</p>
           <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 text-xs text-blue-300">
-            ℹ️ Uses HMAC-SHA256 for proof generation. This is a symmetric commitment scheme, not a true zero-knowledge proof.
+            Generate and verify cryptographic commitments for sensitive data using HMAC-SHA256.
           </div>
         </div>
 
@@ -78,7 +96,15 @@ export const ZKPVault = () => {
 
         {proof && (
           <div className="mt-4 p-4 bg-black border border-white/10 rounded-lg">
-            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Generated HMAC Hash</h3>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Generated HMAC Hash</h3>
+              <button
+                onClick={() => copyToClipboard(proof)}
+                className="flex items-center gap-1 text-xs text-fuchsia-400 hover:text-fuchsia-300 bg-white/5 hover:bg-white/10 px-2 py-1 rounded border border-white/10 transition-colors"
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </button>
+            </div>
             <div className="text-fuchsia-300 font-mono text-xs break-all">{proof}</div>
           </div>
         )}
@@ -87,7 +113,9 @@ export const ZKPVault = () => {
       {/* Verifier Section */}
       <div className="flex-1 p-6 flex flex-col gap-6 bg-black/40">
         <div>
-          <h2 className="font-bold text-fuchsia-400 text-xl mb-2">HMAC Proof Verifier</h2>
+          <h2 className="font-bold text-fuchsia-400 text-xl mb-2 flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5" /> HMAC Proof Verifier
+          </h2>
           <p className="text-sm text-gray-400">Verify an HMAC-SHA256 proof matches the expected data and key.</p>
         </div>
 

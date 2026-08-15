@@ -14,7 +14,7 @@ interface SshConnection {
 export const SshManager = () => {
   const [connections, setConnections] = useState<SshConnection[]>([]);
   const { setCurrentPath, setActiveApp } = useStore.getState();
-  const { success: toastSuccess } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
 
   useEffect(() => {
     const saved = localStorage.getItem('codexos-ssh');
@@ -35,10 +35,16 @@ export const SshManager = () => {
   };
 
   const handleConnect = (conn: SshConnection) => {
-    const fullPath = `ssh://${conn.connectionStr}${conn.path}`;
+    const trimmed = conn.connectionStr.trim();
+    if (!trimmed || trimmed.startsWith('-') || /[;\s|&$`<>]/g.test(trimmed)) {
+      toastError('Invalid SSH Target', 'Connection target must be in user@hostname format without flags or shell characters.');
+      return;
+    }
+    const cleanPath = conn.path.trim().startsWith('/') ? conn.path.trim() : `/${conn.path.trim()}`;
+    const fullPath = `ssh://${trimmed}${cleanPath}`;
     setCurrentPath(fullPath);
     setActiveApp('files');
-    toastSuccess('Connecting to SSH', `Target: ${conn.connectionStr}`);
+    toastSuccess('Connecting to SSH', `Target: ${trimmed}`);
   };
 
   const handleDelete = (id: string) => {

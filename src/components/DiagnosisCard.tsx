@@ -172,7 +172,7 @@ export const DiagnosisCard = ({ triggerId, onNavigateToFile, onRetry }: Diagnosi
             Related Files
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {diagnosis.related_files.map((path) => (
+            {diagnosis.related_files.map((path: string) => (
               <button
                 key={path}
                 onClick={() => onNavigateToFile?.(path)}

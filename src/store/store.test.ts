@@ -4,17 +4,13 @@ import { useStore } from './store';
 // Reset store to a known state before each test
 const resetStore = () => {
   useStore.setState({
-    tabs: [{ id: 'tab-1', activeApp: 'home', currentPath: null, selectedFile: null, openFiles: [] }],
+    tabs: [{ id: 'tab-1', activeApp: 'home', currentPath: null, selectedFile: null, openFiles: [], pathHistory: [], historyIndex: -1 }],
     activeTabId: 'tab-1',
     activeApp: 'home',
     currentPath: null,
     selectedFile: null,
     openFiles: [],
     toasts: [],
-    pathHistory: [],
-    historyIndex: -1,
-    canGoBack: false,
-    canGoForward: false,
     isVaultLocked: true,
     secretsCount: 0,
     gitRepoPath: null,
@@ -103,17 +99,20 @@ describe('useStore — navigation history', () => {
     useStore.getState().pushPath('/home/user');
     useStore.getState().pushPath('/home/user/projects');
     const state = useStore.getState();
+    const activeTab = state.tabs.find(t => t.id === state.activeTabId)!;
     expect(state.currentPath).toBe('/home/user/projects');
-    expect(state.canGoBack).toBe(true);
-    expect(state.canGoForward).toBe(false);
+    expect(activeTab.historyIndex > 0).toBe(true);
+    expect(activeTab.historyIndex < activeTab.pathHistory.length - 1).toBe(false);
   });
 
   test('goBack navigates to previous path', () => {
     useStore.getState().pushPath('/a');
     useStore.getState().pushPath('/b');
     useStore.getState().goBack();
-    expect(useStore.getState().currentPath).toBe('/a');
-    expect(useStore.getState().canGoForward).toBe(true);
+    const state = useStore.getState();
+    const activeTab = state.tabs.find(t => t.id === state.activeTabId)!;
+    expect(state.currentPath).toBe('/a');
+    expect(activeTab.historyIndex < activeTab.pathHistory.length - 1).toBe(true);
   });
 
   test('goForward navigates forward after going back', () => {
@@ -121,8 +120,10 @@ describe('useStore — navigation history', () => {
     useStore.getState().pushPath('/b');
     useStore.getState().goBack();
     useStore.getState().goForward();
-    expect(useStore.getState().currentPath).toBe('/b');
-    expect(useStore.getState().canGoForward).toBe(false);
+    const state = useStore.getState();
+    const activeTab = state.tabs.find(t => t.id === state.activeTabId)!;
+    expect(state.currentPath).toBe('/b');
+    expect(activeTab.historyIndex < activeTab.pathHistory.length - 1).toBe(false);
   });
 
   test('pushPath clears forward history', () => {

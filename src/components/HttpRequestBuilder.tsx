@@ -1,11 +1,18 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Play, Plus, Trash2, Code2, Clock } from 'lucide-react';
+import { Play, Plus, Trash2, Code2, Clock, Copy, Sparkles } from 'lucide-react';
 import { useToast } from '../store/store';
 
 interface Header {
   key: string;
   value: string;
+}
+
+interface HttpResponse {
+  response_status: number;
+  response_headers: [string, string][];
+  response_body: string;
+  duration_ms: number;
 }
 
 export const HttpRequestBuilder = () => {
@@ -14,18 +21,27 @@ export const HttpRequestBuilder = () => {
   const [headers, setHeaders] = useState<Header[]>([{ key: 'Accept', value: '*/*' }]);
   const [body, setBody] = useState('');
   
-  const [response, setResponse] = useState<any>(null);
+  const [response, setResponse] = useState<HttpResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const { error: toastError, success: toastSuccess } = useToast();
 
   const handleSend = async () => {
-    if (!url) return;
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) {
+      toastError('Missing URL', 'Please enter a target request URL.');
+      return;
+    }
+    if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+      toastError('Invalid Protocol', 'URL must start with http:// or https://');
+      return;
+    }
+
     setLoading(true);
     setResponse(null);
     try {
-      const headerTuples = headers.filter(h => h.key.trim() !== '').map(h => [h.key, h.value]);
-      const res: any = await invoke('replay_request', {
-        url,
+      const headerTuples = headers.filter(h => h.key.trim() !== '').map(h => [h.key.trim(), h.value]);
+      const res = await invoke<HttpResponse>('replay_request', {
+        url: trimmedUrl,
         method,
         headers: headerTuples,
         body: body || null
@@ -47,6 +63,23 @@ export const HttpRequestBuilder = () => {
   };
   const removeHeader = (index: number) => {
     setHeaders(headers.filter((_, i) => i !== index));
+  };
+
+  const handlePrettifyBody = () => {
+    if (!body.trim()) return;
+    try {
+      const parsed = JSON.parse(body);
+      setBody(JSON.stringify(parsed, null, 2));
+      toastSuccess('Formatted JSON');
+    } catch {
+      toastError('Format Error', 'Body contains invalid JSON syntax.');
+    }
+  };
+
+  const handleCopyResponseBody = () => {
+    if (!response?.response_body) return;
+    navigator.clipboard.writeText(response.response_body);
+    toastSuccess('Copied to Clipboard', 'Response body copied.');
   };
 
   return (
@@ -115,7 +148,12 @@ export const HttpRequestBuilder = () => {
           </div>
 
           <div>
-            <h3 className="font-bold text-gray-300 text-sm mb-2">Request Body</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-bold text-gray-300 text-sm">Request Body</h3>
+              <button onClick={handlePrettifyBody} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Prettify JSON
+              </button>
+            </div>
             <textarea
               value={body}
               onChange={e => setBody(e.target.value)}
@@ -139,6 +177,13 @@ export const HttpRequestBuilder = () => {
               <span className="flex items-center gap-1 text-gray-400">
                 <Clock className="w-3 h-3" /> {response.duration_ms} ms
               </span>
+              <button 
+                onClick={handleCopyResponseBody} 
+                className="p-1 hover:bg-white/10 rounded text-gray-400 hover:text-white transition-colors"
+                title="Copy response body"
+              >
+                <Copy className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
         </div>
@@ -154,7 +199,7 @@ export const HttpRequestBuilder = () => {
                 <div>
                   <h4 className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">Response Headers</h4>
                   <div className="bg-black/50 border border-white/10 rounded p-3 text-xs font-mono text-gray-300 space-y-1">
-                    {response.response_headers.map((h: any, i: number) => (
+                    {response.response_headers.map((h, i) => (
                       <div key={i}><span className="text-indigo-400 font-bold">{h[0]}:</span> {h[1]}</div>
                     ))}
                   </div>

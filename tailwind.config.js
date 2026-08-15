@@ -12,6 +12,8 @@ export default {
           DEFAULT: 'rgb(var(--accent-cyan))',
         },
         panel: 'var(--bg-panel)',
+        'app-bg': '#050505',
+        'app-glow': 'rgba(49, 46, 129, 0.1)',
       }
     },
   },

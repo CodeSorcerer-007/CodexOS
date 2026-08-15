@@ -1,12 +1,7 @@
 import { create } from 'zustand';
 
-export interface Diagnosis {
-  cause: string;
-  confidence: 'high' | 'medium' | 'low';
-  explanation: string;
-  suggested_fix: string;
-  related_files: string[];
-}
+import type { Diagnosis } from '../ipc';
+export type { Diagnosis };
 
 export interface DiagnosisEntry {
   status: 'loading' | 'success' | 'error';

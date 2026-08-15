@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/tauri-apps/tauri/dev/app-icon.png" width="128" height="128" alt="CodexOS Icon" />
+  <img src="./logo.png" width="140" height="140" alt="CodexOS Logo" />
   
   # CodexOS
 
@@ -12,6 +12,9 @@
   [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](#)
   [![Mistral AI](https://img.shields.io/badge/Mistral-AI_Copilot-FF7000?style=for-the-badge&logo=openai&logoColor=white)](#)
   [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#)
+  [![CI](https://github.com/CodeSorcerer-007/CodexOS/actions/workflows/ci.yml/badge.svg)](#)
+  [![Clippy](https://img.shields.io/badge/clippy-passing-green?logo=rust)](#)
+  [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#)
 </div>
 
 <br/>
@@ -253,6 +256,15 @@ cd src-tauri && cargo clippy
 npm run tauri build
 ```
 
+### Local Development Services
+
+To test the proxy interceptor or network features locally, you can use the provided Docker Compose stack:
+
+```bash
+docker-compose up -d
+```
+This spins up dummy services (like nginx) to generate local traffic and test the network interceptors safely.
+
 ---
 
 ## 📁 Project Structure
@@ -295,7 +307,7 @@ CodexOS/
 │   │   ├── proxy.rs              # HTTP proxy/interceptor
 │   │   ├── secrets.rs            # Secrets vault (ChaCha20-Poly1305)
 │   │   ├── vault.rs              # ZKP encryption
-│   │   ├── zkp.rs                # Zero-knowledge proofs
+│   │   ├── hmac_vault.rs         # HMAC-based ZKP vault
 │   │   ├── ports.rs              # Port management & log tailing
 │   │   ├── sys.rs                # System stats
 │   │   ├── tunnel.rs             # SSH reverse tunneling

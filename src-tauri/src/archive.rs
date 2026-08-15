@@ -1,3 +1,4 @@
+use crate::error::AppResult;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -8,7 +9,7 @@ pub struct ZipEntryInfo {
 }
 
 #[tauri::command]
-pub fn list_zip_contents(path: String) -> Result<Vec<ZipEntryInfo>, String> {
+pub fn list_zip_contents(path: String) -> AppResult<Vec<ZipEntryInfo>> {
     use std::fs::File;
     use zip::ZipArchive;
 
@@ -28,8 +29,10 @@ pub fn list_zip_contents(path: String) -> Result<Vec<ZipEntryInfo>, String> {
     Ok(entries)
 }
 
+const MAX_ZIP_ENTRY_READ_BYTES: u64 = 10 * 1024 * 1024; // 10 MB
+
 #[tauri::command]
-pub fn read_zip_file(zip_path: String, internal_path: String) -> Result<String, String> {
+pub fn read_zip_file(zip_path: String, internal_path: String) -> AppResult<String> {
     use std::fs::File;
     use std::io::Read;
     use zip::ZipArchive;
@@ -39,10 +42,42 @@ pub fn read_zip_file(zip_path: String, internal_path: String) -> Result<String, 
 
     let mut zip_file = archive.by_name(&internal_path).map_err(|e| e.to_string())?;
 
-    let mut contents = String::new();
-    zip_file
-        .read_to_string(&mut contents)
-        .map_err(|e| e.to_string())?;
+    let mut buffer = Vec::new();
+    let mut reader = (&mut zip_file).take(MAX_ZIP_ENTRY_READ_BYTES);
+    reader.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
 
-    Ok(contents)
+    let content = String::from_utf8_lossy(&buffer).to_string();
+    Ok(content)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+    use zip::write::FileOptions;
+    use zip::ZipWriter;
+
+    #[test]
+    fn test_zip_list_and_read() {
+        let temp_zip = NamedTempFile::new().unwrap();
+        let path = temp_zip.path().to_string_lossy().to_string();
+
+        {
+            let file = std::fs::File::create(&path).unwrap();
+            let mut zip = ZipWriter::new(file);
+            let options = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+
+            zip.start_file("test.txt", options).unwrap();
+            zip.write_all(b"Hello from inside zip!").unwrap();
+            zip.finish().unwrap();
+        }
+
+        let entries = list_zip_contents(path.clone()).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "test.txt");
+
+        let content = read_zip_file(path, "test.txt".to_string()).unwrap();
+        assert_eq!(content, "Hello from inside zip!");
+    }
 }

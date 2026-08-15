@@ -28,7 +28,9 @@ export const AutomationStudio = () => {
 
   const getDbPath = () => {
     if (!currentPath) return null;
-    return `${currentPath}\\.codexos-automation.db`;
+    const separator = currentPath.includes('/') ? '/' : '\\';
+    const cleanPath = currentPath.endsWith('/') || currentPath.endsWith('\\') ? currentPath.slice(0, -1) : currentPath;
+    return `${cleanPath}${separator}.codexos-automation.db`;
   };
 
   const initDb = async () => {

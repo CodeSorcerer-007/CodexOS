@@ -1,3 +1,4 @@
+use crate::error::AppResult;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use sysinfo::{Disks, System};
@@ -25,25 +26,43 @@ pub struct ProcessMemInfo {
     pub memory_bytes: u64,
 }
 
-pub struct SysState(pub Mutex<System>);
+use std::sync::Arc;
+
+pub struct SysState(pub Arc<Mutex<System>>);
 
 #[tauri::command]
 pub fn get_sys_stats(state: tauri::State<'_, SysState>) -> SysStats {
-    let mut sys = state.0.lock().unwrap();
-    sys.refresh_all();
+    let mut sys = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    sys.refresh_cpu_usage();
+    sys.refresh_memory();
 
-    let cpu_usage = sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32;
+    let cpu_usage = if !sys.cpus().is_empty() {
+        sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32
+    } else {
+        0.0
+    };
     let mem_total = sys.total_memory();
     let mem_used = sys.used_memory();
 
     let disks = Disks::new_with_refreshed_list();
     let drives = disks
         .iter()
-        .map(|d| DriveInfo {
-            name: format!("{:?}", d.name()),
-            mount_point: format!("{}", d.mount_point().display()),
-            total_space: d.total_space(),
-            available_space: d.available_space(),
+        .map(|d| {
+            let n = d.name().to_string_lossy().to_string();
+            let name = if n.is_empty() {
+                d.mount_point().to_string_lossy().to_string()
+            } else {
+                n
+            };
+            DriveInfo {
+                name,
+                mount_point: format!("{}", d.mount_point().display()),
+                total_space: d.total_space(),
+                available_space: d.available_space(),
+            }
         })
         .collect();
 
@@ -56,21 +75,28 @@ pub fn get_sys_stats(state: tauri::State<'_, SysState>) -> SysStats {
 }
 
 #[tauri::command]
+pub fn get_api_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+#[tauri::command]
 pub fn get_top_processes_memory(state: tauri::State<'_, SysState>) -> Vec<ProcessMemInfo> {
-    let mut sys = state.0.lock().unwrap();
-    sys.refresh_processes();
+    let mut sys = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
 
     let mut processes: Vec<ProcessMemInfo> = sys
         .processes()
         .iter()
         .map(|(pid, proc)| ProcessMemInfo {
             pid: pid.as_u32(),
-            name: proc.name().to_string(),
-            memory_bytes: proc.memory() * 1024,
+            name: proc.name().to_string_lossy().to_string(),
+            memory_bytes: proc.memory(),
         })
         .collect();
 
-    // Sort descending by memory first, then take the top 20.
     processes.sort_by_key(|p| std::cmp::Reverse(p.memory_bytes));
     processes.into_iter().take(20).collect()
 }
@@ -84,22 +110,36 @@ pub struct GpuInfo {
 }
 
 #[tauri::command]
-pub fn get_gpu_info() -> Result<Vec<GpuInfo>, String> {
-    let script = "Get-WmiObject Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoProcessor | ConvertTo-Json";
-    let output = std::process::Command::new("powershell")
+pub fn get_gpu_info() -> AppResult<Vec<GpuInfo>> {
+    if !cfg!(target_os = "windows") {
+        return Ok(Vec::new());
+    }
+
+    let script = "Get-WmiObject Win32_VideoController -ErrorAction SilentlyContinue | Select-Object Name,AdapterRAM,DriverVersion,VideoProcessor | ConvertTo-Json";
+    let output = match std::process::Command::new("powershell")
         .args(["-NoProfile", "-Command", script])
         .output()
-        .map_err(|e| e.to_string())?;
+    {
+        Ok(out) => out,
+        Err(_) => return Ok(Vec::new()),
+    };
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
 
     let json = String::from_utf8_lossy(&output.stdout);
+    if json.trim().is_empty() {
+        return Ok(Vec::new());
+    }
 
-    // Parse the JSON. Note: if only one GPU, it's an object not array.
-    // Handle both cases.
-    let value: serde_json::Value =
-        serde_json::from_str(&json).map_err(|e| format!("Parse error: {}", e))?;
+    let value: serde_json::Value = match serde_json::from_str(&json) {
+        Ok(v) => v,
+        Err(_) => return Ok(Vec::new()),
+    };
 
     let items = if value.is_array() {
-        value.as_array().unwrap().clone()
+        value.as_array().unwrap_or(&Vec::new()).clone()
     } else {
         vec![value]
     };
@@ -129,9 +169,7 @@ pub fn get_gpu_info() -> Result<Vec<GpuInfo>, String> {
 }
 
 #[tauri::command]
-pub fn get_gpu_utilization() -> Result<u8, String> {
-    // Get GPU utilization via nvidia-smi if NVIDIA GPU, else return 0
-    // Try nvidia-smi first (NVIDIA GPUs)
+pub fn get_gpu_utilization() -> AppResult<u8> {
     let nvidia = std::process::Command::new("nvidia-smi")
         .args([
             "--query-gpu=utilization.gpu",
@@ -142,10 +180,91 @@ pub fn get_gpu_utilization() -> Result<u8, String> {
     if let Ok(output) = nvidia {
         if output.status.success() {
             let s = String::from_utf8_lossy(&output.stdout);
-            return s.trim().parse::<u8>().map_err(|e| e.to_string());
+            if let Ok(val) = s.trim().parse::<u8>() {
+                return Ok(val);
+            }
         }
     }
 
-    // Fallback: use WMIC for basic GPU process info
     Ok(0)
+}
+
+#[tauri::command]
+pub fn window_minimize(window: tauri::WebviewWindow) -> AppResult<()> {
+    window.minimize().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+}
+
+#[tauri::command]
+pub fn window_toggle_maximize(window: tauri::WebviewWindow) -> AppResult<()> {
+    if window.is_maximized().unwrap_or(false) {
+        window.unmaximize().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+    } else {
+        window.maximize().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+    }
+}
+
+#[tauri::command]
+pub fn window_close(window: tauri::WebviewWindow) -> AppResult<()> {
+    window.close().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+    use sysinfo::System;
+
+    #[test]
+    fn test_sys_state_initialization() {
+        let state = SysState(std::sync::Arc::new(Mutex::new(System::new_all())));
+        let mut sys = state.0.lock().unwrap();
+        sys.refresh_memory();
+        assert!(sys.total_memory() > 0);
+    }
+
+    #[test]
+    fn test_sys_state_poison_recovery() {
+        let state = SysState(std::sync::Arc::new(Mutex::new(System::new_all())));
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = state.0.lock().unwrap();
+            panic!("poisoning lock");
+        });
+        assert!(state.0.is_poisoned());
+        let mut recovered = match state.0.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        recovered.refresh_memory();
+        assert!(recovered.total_memory() > 0);
+    }
+
+    #[test]
+    fn test_get_top_processes_memory_ordering() {
+        let sys_arc = std::sync::Arc::new(Mutex::new(System::new_all()));
+        let state = SysState(sys_arc.clone());
+        {
+            let mut sys = sys_arc.lock().unwrap();
+            sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        }
+        let processes = {
+            let sys = state.0.lock().unwrap();
+            let mut procs: Vec<ProcessMemInfo> = sys
+                .processes()
+                .iter()
+                .map(|(pid, proc)| ProcessMemInfo {
+                    pid: pid.as_u32(),
+                    name: proc.name().to_string_lossy().to_string(),
+                    memory_bytes: proc.memory(),
+                })
+                .collect();
+            procs.sort_by_key(|p| std::cmp::Reverse(p.memory_bytes));
+            procs.into_iter().take(20).collect::<Vec<_>>()
+        };
+
+        if processes.len() > 1 {
+            for i in 0..(processes.len() - 1) {
+                assert!(processes[i].memory_bytes >= processes[i + 1].memory_bytes);
+            }
+        }
+    }
 }

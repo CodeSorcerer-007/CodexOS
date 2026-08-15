@@ -1,13 +1,14 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Database, Activity, HardDrive, Cpu, GitBranch, Key, Network, ShieldAlert, Box } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useStore } from '../store/store';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { SIDEBAR_ITEMS, type Tab } from '../App';
+import type { AppId } from '../types/apps';
+import { SIDEBAR_ITEMS } from './layout/Sidebar';
 
 interface DashboardProps {
-  onOpenApp: (app: Tab['activeApp']) => void;
+  onOpenApp: (app: AppId) => void;
 }
 
 interface SysStats {
@@ -22,6 +23,14 @@ interface GitStatus {
   unstaged: string[];
   untracked: string[];
   branch: string;
+}
+
+interface DockerContainerSummary {
+  id: string;
+  names: string[];
+  image?: string;
+  status?: string;
+  state?: string;
 }
 
 export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
@@ -61,7 +70,7 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
   }, [currentPath]);
 
   useEffect(() => {
-    invoke<any[]>('get_docker_containers')
+    invoke<DockerContainerSummary[]>('get_docker_containers')
       .then(containers => setDockerCount(containers.length))
       .catch(() => setDockerCount(0));
   }, []);
@@ -105,17 +114,17 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
     'border-blue-500/30 hover:border-blue-500 hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] text-blue-400',
   ];
 
-  const widgets = SIDEBAR_ITEMS.filter(item => item.id !== 'home').map((item, index) => {
+  const widgets = SIDEBAR_ITEMS.filter((item) => item.id !== 'home').map((item, index: number) => {
     const colorClass = colors[index % colors.length];
     const borderColor = colorClass.split(' ')[0] + ' ' + colorClass.split(' ')[1] + ' ' + colorClass.split(' ')[2];
     
-    let badge = null;
+    let badge: string | number | null = null;
     if (item.id === 'secrets' && secretsCount > 0) badge = secretsCount;
     if (item.id === 'tunnel' && activeTunnelCount > 0) badge = activeTunnelCount;
     if (item.id === 'git' && gitModified > 0) badge = gitModified;
     
     return {
-      id: item.id,
+      id: item.id as AppId,
       name: item.label,
       icon: <div className={`w-8 h-8 ${colorClass.split(' ')[3]}`}>{item.icon}</div>,
       desc: `Open ${item.label}`,
@@ -132,12 +141,15 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
       <motion.div 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-10"
+        className="mb-10 flex items-center gap-5"
       >
-        <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 mb-2 tracking-tight">
-          Welcome to CodexOS v2
-        </h1>
-        <p className="text-gray-400 font-medium">The Ultimate Offline Developer OS.</p>
+        <img src="/logo.png" alt="CodexOS Logo" className="w-16 h-16 object-contain rounded-2xl shadow-xl shadow-indigo-500/20 border border-white/10 shrink-0" />
+        <div>
+          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 mb-1 tracking-tight">
+            Welcome to CodexOS v2
+          </h1>
+          <p className="text-gray-400 font-medium">The Ultimate Offline Developer OS.</p>
+        </div>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
@@ -282,7 +294,7 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
               variants={itemVariants}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => onOpenApp(w.id as any)}
+              onClick={() => onOpenApp(w.id)}
               className={`bg-black/40 backdrop-blur-sm border ${w.color} rounded-2xl p-6 flex flex-col items-start gap-4 transition-all duration-300 group text-left relative overflow-hidden`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -292,7 +304,7 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
                 <p className="text-sm text-gray-400">{w.desc}</p>
               </div>
               {w.badge !== null && (
-                <div className="absolute top-4 right-4 bg-white/10 border border-white/20 text-white text-xs font-bold px-2 py-1 rounded-full">
+                <div className="absolute top-4 right-4 bg-white/10 border border-white/20 text-white text-xs font-bold px-2 py-1 rounded-full cx-badge-pulse">
                   {w.badge}
                 </div>
               )}

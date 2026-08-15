@@ -1,7 +1,7 @@
 {
   "name": "codexos",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -12,7 +12,8 @@
     "lint": "oxlint .",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@fluentui/react-icons": "^2.0.335",

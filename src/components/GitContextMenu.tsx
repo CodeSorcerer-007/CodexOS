@@ -28,9 +28,9 @@ export const GitContextMenu = ({ x, y, filePath, repoPath, onClose, onActionComp
       toastSuccess('Git Action Succeeded', `Executed ${action} on ${fileName}`);
       onActionComplete();
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      toastError('Git Action Failed', String(e));
+      toastError('Git Action Failed', e instanceof Error ? e.message : String(e));
       onClose();
     }
   };
@@ -55,19 +55,19 @@ export const GitContextMenu = ({ x, y, filePath, repoPath, onClose, onActionComp
           className="fixed z-[100] w-48 liquid-glass rounded-xl border border-white/10 shadow-2xl py-2 flex flex-col backdrop-blur-xl"
           onMouseLeave={() => !isCommitting && onClose()}
         >
-          <div className="px-4 py-2 border-b border-white/10 text-xs font-mono text-cyan truncate mb-1">
+          <div className="px-4 py-2 border-b border-white/10 text-xs font-mono text-cyan-400 truncate mb-1">
             {fileName}
           </div>
           <button 
             onClick={() => handleGitAction('add')}
-            className="px-4 py-2 text-sm text-left hover:bg-cyan/20 transition-colors text-white flex justify-between"
+            className="px-4 py-2 text-sm text-left hover:bg-cyan-500/20 transition-colors text-white flex justify-between"
           >
             <span>Stage File</span>
             <span className="text-gray-500 font-mono text-xs">+</span>
           </button>
           <button 
             onClick={() => setIsCommitting(true)}
-            className="px-4 py-2 text-sm text-left hover:bg-cyan/20 transition-colors text-white flex justify-between"
+            className="px-4 py-2 text-sm text-left hover:bg-cyan-500/20 transition-colors text-white flex justify-between"
           >
             <span>Commit File</span>
             <span className="text-gray-500 font-mono text-xs">C</span>
@@ -95,7 +95,7 @@ export const GitContextMenu = ({ x, y, filePath, repoPath, onClose, onActionComp
                 if (e.key === 'Escape') onClose();
               }}
               placeholder="Enter commit message..."
-              className="w-full bg-black/50 border border-white/20 rounded px-3 py-2 text-white font-mono text-sm focus:border-cyan outline-none"
+              className="w-full bg-black/50 border border-white/20 rounded px-3 py-2 text-white font-mono text-sm focus:border-cyan-500 outline-none"
             />
             <div className="flex justify-end gap-3 mt-2">
               <button
@@ -106,7 +106,7 @@ export const GitContextMenu = ({ x, y, filePath, repoPath, onClose, onActionComp
               </button>
               <button
                 onClick={handleCommitSubmit}
-                className="px-4 py-2 bg-cyan text-black font-bold rounded-lg text-sm transition-colors"
+                className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold rounded-lg text-sm transition-colors"
               >
                 Commit
               </button>

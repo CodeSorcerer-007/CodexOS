@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ArrowRight } from 'lucide-react';
 import { useStore } from '../store/store';
-import { SIDEBAR_ITEMS } from '../App';
+import { NAVIGATION_ITEMS, type NavigationItem } from '../config/navigation';
 
 export const CommandPalette = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -12,26 +12,12 @@ export const CommandPalette = () => {
   const { setActiveApp, openWorkspace } = useStore();
   const recentWorkspaces = useStore(s => s.settings.recentWorkspaces || []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setIsOpen((prev) => !prev);
-      }
-      if (e.key === 'Escape') {
-        setIsOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const items = SIDEBAR_ITEMS.map((item) => ({
+  const items = NAVIGATION_ITEMS.map((item: NavigationItem) => ({
     id: item.id,
     label: item.label,
     icon: item.icon,
     action: () => {
-      setActiveApp(item.id as any);
+      setActiveApp(item.id);
       setIsOpen(false);
       setSearch('');
     },
@@ -60,15 +46,40 @@ export const CommandPalette = () => {
   }, [search]);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (isOpen && filteredItems[selectedIndex]) {
+      const el = document.getElementById(`cp-item-${filteredItems[selectedIndex].id}`);
+      if (el) {
+        el.scrollIntoView?.({ block: 'nearest' });
+      }
+    }
+  }, [selectedIndex, isOpen, filteredItems]);
 
-    const handleKeyboard = (e: KeyboardEvent) => {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsOpen((prev) => !prev);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsOpen(false);
+        return;
+      }
+
+      if (!isOpen) return;
+
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
+        if (filteredItems.length > 0) {
+          setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
+        }
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % filteredItems.length);
+        if (filteredItems.length > 0) {
+          setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % filteredItems.length);
+        }
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (filteredItems[selectedIndex]) {
@@ -76,8 +87,9 @@ export const CommandPalette = () => {
         }
       }
     };
-    window.addEventListener('keydown', handleKeyboard);
-    return () => window.removeEventListener('keydown', handleKeyboard);
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, filteredItems, selectedIndex]);
 
   return (

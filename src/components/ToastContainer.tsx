@@ -1,30 +1,31 @@
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useStore, type Toast } from '../store/store';
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { useStore } from '../store/store';
+import type { Toast, ToastType } from '../store/slices/uiSlice';
+import { CheckCircle2, XCircle, AlertTriangle, Info, X, type LucideIcon } from 'lucide-react';
 
-const ICONS = {
+const ICONS: Record<ToastType, LucideIcon> = {
   success: CheckCircle2,
   error: XCircle,
   warning: AlertTriangle,
   info: Info,
 };
 
-const BORDERS = {
+const BORDERS: Record<ToastType, string> = {
   success: 'border-l-green-500 shadow-green-500/20',
   error: 'border-l-red-500 shadow-red-500/20',
   warning: 'border-l-amber-500 shadow-amber-500/20',
   info: 'border-l-blue-500 shadow-blue-500/20',
 };
 
-const COLORS = {
+const COLORS: Record<ToastType, string> = {
   success: 'text-green-500',
   error: 'text-red-500',
   warning: 'text-amber-500',
   info: 'text-blue-500',
 };
 
-const PROGRESS = {
+const PROGRESS: Record<ToastType, string> = {
   success: 'bg-green-500',
   error: 'bg-red-500',
   warning: 'bg-amber-500',
@@ -46,11 +47,13 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
   return (
     <motion.div
       layout
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       initial={{ opacity: 0, x: 100, scale: 0.9 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: 100, scale: 0.9 }}
       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-      className={`relative w-80 bg-[#0f0f0f]/90 backdrop-blur-xl border-y border-r border-white/10 border-l-4 rounded-2xl shadow-2xl overflow-hidden cursor-pointer group ${BORDERS[toast.type]}`}
+      className={`relative w-80 bg-[#0f0f0f]/90 backdrop-blur-xl border-y border-r border-white/10 border-l-4 rounded-2xl shadow-2xl overflow-hidden cursor-pointer pointer-events-auto group ${BORDERS[toast.type]}`}
       onClick={() => onRemove(toast.id)}
     >
       <div className="flex items-start p-4 pr-8">
@@ -65,6 +68,7 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: (id: string) =
       
       <button 
         onClick={(e) => { e.stopPropagation(); onRemove(toast.id); }}
+        aria-label="Dismiss notification"
         className="absolute top-4 right-3 text-white/40 hover:text-white/80 transition-colors opacity-0 group-hover:opacity-100"
       >
         <X className="w-4 h-4" />
@@ -89,7 +93,11 @@ export function ToastContainer() {
   const removeToast = useStore((s) => s.removeToast);
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 items-end pointer-events-none">
+    <div 
+      role="region" 
+      aria-label="Notifications" 
+      className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 items-end pointer-events-none"
+    >
       <div className="pointer-events-auto flex flex-col gap-3 items-end">
         <AnimatePresence mode="popLayout">
           {toasts.map((toast) => (

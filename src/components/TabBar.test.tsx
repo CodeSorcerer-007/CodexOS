@@ -7,7 +7,7 @@ describe('TabBar Component', () => {
   beforeEach(() => {
     // Reset store before each test
     useStore.setState({
-      tabs: [{ id: 'test-tab-1', activeApp: 'home', currentPath: null, selectedFile: null, openFiles: [] }],
+      tabs: [{ id: 'test-tab-1', activeApp: 'home', currentPath: null, selectedFile: null, openFiles: [], pathHistory: [], historyIndex: -1 }],
       activeTabId: 'test-tab-1'
     });
   });

@@ -11,7 +11,7 @@ const fireKey = (key: string, modifiers: { ctrlKey?: boolean; shiftKey?: boolean
 
 const resetStore = () => {
   useStore.setState({
-    tabs: [{ id: 'tab-1', activeApp: 'home', currentPath: null, selectedFile: null, openFiles: [] }],
+    tabs: [{ id: 'tab-1', activeApp: 'home', currentPath: null, selectedFile: null, openFiles: [], pathHistory: [], historyIndex: -1 }],
     activeTabId: 'tab-1',
     activeApp: 'home',
     isVaultLocked: false,
@@ -27,7 +27,7 @@ describe('useKeyboardShortcuts', () => {
     expect(useStore.getState().activeApp).toBe('home');
   });
 
-  it('Ctrl+4 navigates to terminal', () => {
+  it('Ctrl+4 navigates to 4th sidebar item (terminal)', () => {
     renderHook(() => useKeyboardShortcuts());
     fireKey('4', { ctrlKey: true });
     expect(useStore.getState().activeApp).toBe('terminal');

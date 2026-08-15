@@ -1,5 +1,9 @@
+use crate::error::{AppError, AppResult};
+use crate::cli_runner::{run_cli, run_cli_parse};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
+/// Executes the detect_tool command.
 #[tauri::command]
 pub fn detect_tool(tool: String) -> String {
     let args = match tool.as_str() {
@@ -10,15 +14,25 @@ pub fn detect_tool(tool: String) -> String {
         _ => return String::new(),
     };
 
-    std::process::Command::new(&tool)
-        .args(args)
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    run_cli(&tool, &args, None)
+        .map(|r| if r.exit_code == 0 { r.stdout.trim().to_string() } else { String::new() })
         .unwrap_or_default()
 }
 
+/// Probes the local Ollama HTTP endpoint from the Rust backend, avoiding
+/// CSP restrictions that would block a direct WebView `fetch` in production builds.
+#[tauri::command]
+pub fn is_ollama_running() -> bool {
+    // A HEAD request is sufficient; we only care about reachability.
+    std::process::Command::new("curl")
+        .args(["--silent", "--fail", "--max-time", "2", "--head", "http://127.0.0.1:11434/"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+
+/// Executes the get_os_info command.
 #[tauri::command]
 pub fn get_os_info() -> String {
     std::env::consts::OS.to_string()
@@ -32,132 +46,180 @@ pub struct WindowsService {
     pub start_type: String,
 }
 
-#[tauri::command]
-pub fn get_env_vars() -> Result<std::collections::HashMap<String, String>, String> {
-    let output = std::process::Command::new("powershell")
-        .args([
-            "-Command",
-            "[Environment]::GetEnvironmentVariables('User') | ConvertTo-Json",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let json_str = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(&json_str).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub fn set_env_var(name: String, value: String) -> Result<(), String> {
-    let output = std::process::Command::new("powershell")
-        .env("NEW_ENV_NAME", &name)
-        .env("NEW_ENV_VAL", &value)
-        .args([
-            "-Command",
-            "[Environment]::SetEnvironmentVariable($env:NEW_ENV_NAME, $env:NEW_ENV_VAL, 'User')",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+fn validate_env_var_name(name: &str) -> AppResult<()> {
+    if name.is_empty() || name.len() > 256 {
+        return Err(AppError::Custom("Environment variable name must be between 1 and 256 characters".into()));
     }
-
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(AppError::Custom("Environment variable name must contain only alphanumeric characters and underscores".into()));
+    }
     Ok(())
 }
 
+/// Executes the get_env_vars command.
 #[tauri::command]
-pub fn delete_env_var(name: String) -> Result<(), String> {
-    let output = std::process::Command::new("powershell")
-        .env("DEL_ENV_NAME", &name)
-        .args([
-            "-Command",
-            "[Environment]::SetEnvironmentVariable($env:DEL_ENV_NAME, $null, 'User')",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    Ok(())
+pub fn get_env_vars() -> AppResult<HashMap<String, String>> {
+    run_cli_parse("powershell", &["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariables('User') | ConvertTo-Json"], None, |stdout| {
+        serde_json::from_str(stdout).map_err(|e| AppError::Custom(e.to_string()))
+    })
 }
 
+/// Executes the set_env_var command.
 #[tauri::command]
-pub fn get_services() -> Result<Vec<WindowsService>, String> {
+pub fn set_env_var(name: String, value: String) -> AppResult<()> {
+    validate_env_var_name(&name)?;
+    let res = run_cli(
+        "powershell",
+        &[
+            "-NoProfile",
+            "-Command",
+            "param($n, $v) [Environment]::SetEnvironmentVariable($n, $v, 'User')",
+            "-n",
+            &name,
+            "-v",
+            &value,
+        ],
+        None,
+    )?;
+    if res.exit_code == 0 {
+        Ok(())
+    } else {
+        Err(AppError::Command(res.stderr))
+    }
+}
+
+/// Executes the delete_env_var command.
+#[tauri::command]
+pub fn delete_env_var(name: String) -> AppResult<()> {
+    validate_env_var_name(&name)?;
+    let res = run_cli(
+        "powershell",
+        &[
+            "-NoProfile",
+            "-Command",
+            "param($n) [Environment]::SetEnvironmentVariable($n, $null, 'User')",
+            "-n",
+            &name,
+        ],
+        None,
+    )?;
+    if res.exit_code == 0 {
+        Ok(())
+    } else {
+        Err(AppError::Command(res.stderr))
+    }
+}
+
+/// Executes the get_services command.
+#[tauri::command]
+pub fn get_services() -> AppResult<Vec<WindowsService>> {
     let script = "Get-Service | Select-Object Name, DisplayName, @{Name='status';Expression={$_.Status.ToString()}}, @{Name='start_type';Expression={$_.StartType.ToString()}} | ConvertTo-Json -Depth 2";
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", script])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let json_str = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(&json_str).map_err(|e| e.to_string())
+    run_cli_parse("powershell", &["-NoProfile", "-Command", script], None, |stdout| {
+        serde_json::from_str(stdout).map_err(|e| AppError::Custom(e.to_string()))
+    })
 }
 
+/// Executes the manage_service command.
 #[tauri::command]
-pub fn manage_service(name: String, action: String) -> Result<(), String> {
-    let script = format!("{}-Service -Name $env:SERVICE_NAME -Force", action);
-    let output = std::process::Command::new("powershell")
-        .env("SERVICE_NAME", &name)
-        .args(["-NoProfile", "-Command", &script])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).to_string();
-        if err.contains("Access is denied") || err.contains("Cannot open") {
-            return Err(
-                "Access Denied: You must run CodexOS as Administrator to modify this service."
-                    .to_string(),
-            );
-        }
-        return Err(err);
+pub fn manage_service(name: String, action: String) -> AppResult<()> {
+    let normalized_action = match action.to_lowercase().as_str() {
+        "start" => "Start",
+        "stop" => "Stop",
+        "restart" => "Restart",
+        _ => return Err(AppError::Custom("Invalid service action. Allowed actions: start, stop, restart".into())),
+    };
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.') {
+        return Err(AppError::Custom("Invalid service name. Contains disallowed characters".into()));
     }
-
+    let script = match normalized_action {
+        "Start" => "param($svc) Start-Service -Name $svc -Force",
+        "Stop" => "param($svc) Stop-Service -Name $svc -Force",
+        _ => "param($svc) Restart-Service -Name $svc -Force",
+    };
+    let res = run_cli("powershell", &["-NoProfile", "-Command", script, "-svc", &name], None)?;
+    
+    if res.exit_code != 0 {
+        let err = res.stderr;
+        if err.contains("Access is denied") || err.contains("Cannot open") {
+            return Err(AppError::Command("Access Denied: You must run CodexOS as Administrator to modify this service.".to_string()));
+        }
+        return Err(AppError::Command(err));
+    }
     Ok(())
 }
 
+/// Executes the list_wsl_distros command.
 #[tauri::command]
-pub fn list_wsl_distros() -> Result<Vec<String>, String> {
+pub fn list_wsl_distros() -> AppResult<Vec<String>> {
     let script = "Get-ChildItem HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss -ErrorAction SilentlyContinue | ForEach-Object { (Get-ItemProperty $_.PSPath).DistributionName }";
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", script])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let distros_str = String::from_utf8_lossy(&output.stdout);
-    let mut distros = Vec::new();
-    for line in distros_str.lines() {
-        let trimmed = line.trim();
-        if !trimmed.is_empty() {
-            distros.push(trimmed.to_string());
+    run_cli_parse("powershell", &["-NoProfile", "-Command", script], None, |stdout| {
+        let mut distros = Vec::new();
+        for line in stdout.lines() {
+            let trimmed = line.trim();
+            if !trimmed.is_empty() {
+                distros.push(trimmed.to_string());
+            }
         }
-    }
-    Ok(distros)
+        Ok(distros)
+    })
 }
 
+/// Executes the get_project_tasks command.
 #[tauri::command]
-pub fn get_project_tasks(
-    path: String,
-) -> Result<std::collections::HashMap<String, String>, String> {
-    let pkg_path = std::path::Path::new(&path).join("package.json");
+pub fn get_project_tasks(path: String) -> AppResult<HashMap<String, String>> {
+    let mut tasks = HashMap::new();
+    let root = std::path::Path::new(&path);
+
+    // 1. package.json
+    let pkg_path = root.join("package.json");
     if pkg_path.exists() {
-        let content = std::fs::read_to_string(pkg_path).map_err(|e| e.to_string())?;
-        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            if let Some(scripts) = json.get("scripts").and_then(|s| s.as_object()) {
-                let mut tasks = std::collections::HashMap::new();
-                for (key, val) in scripts {
-                    if let Some(v_str) = val.as_str() {
-                        tasks.insert(key.clone(), v_str.to_string());
+        if let Ok(content) = std::fs::read_to_string(&pkg_path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(scripts) = json.get("scripts").and_then(|s| s.as_object()) {
+                    for (key, val) in scripts {
+                        if let Some(v_str) = val.as_str() {
+                            tasks.insert(key.clone(), v_str.to_string());
+                        }
                     }
                 }
-                return Ok(tasks);
             }
         }
     }
 
-    Ok(std::collections::HashMap::new())
+    // 2. Cargo.toml
+    let cargo_path = root.join("Cargo.toml");
+    if cargo_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&cargo_path) {
+            tasks.insert("cargo:check".to_string(), "cargo check".to_string());
+            tasks.insert("cargo:build".to_string(), "cargo build".to_string());
+            tasks.insert("cargo:test".to_string(), "cargo test".to_string());
+            tasks.insert("cargo:clippy".to_string(), "cargo clippy".to_string());
+            if content.contains("[[bin]]") || content.contains("[package]") {
+                tasks.insert("cargo:run".to_string(), "cargo run".to_string());
+            }
+        }
+    }
+
+    // 3. Makefile
+    let make_path = root.join("Makefile");
+    if make_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&make_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('#') || trimmed.starts_with('.') || trimmed.is_empty() {
+                    continue;
+                }
+                if let Some((target, _)) = trimmed.split_once(':') {
+                    let target_name = target.trim();
+                    if !target_name.contains(' ') && !target_name.contains('$') && !target_name.contains('=') && !target_name.is_empty() {
+                        tasks.insert(format!("make:{}", target_name), format!("make {}", target_name));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(tasks)
 }
 
 fn get_hosts_path() -> &'static str {
@@ -168,78 +230,168 @@ fn get_hosts_path() -> &'static str {
     }
 }
 
+/// Executes the read_hosts command.
 #[tauri::command]
-pub fn read_hosts() -> Result<String, String> {
+pub fn read_hosts() -> AppResult<String> {
     let path = get_hosts_path();
-    std::fs::read_to_string(path).map_err(|e| e.to_string())
+    std::fs::read_to_string(path).map_err(|e| AppError::Io(e.to_string()))
 }
 
+/// Executes the write_hosts command.
 #[tauri::command]
-pub fn write_hosts(content: String) -> Result<(), String> {
+pub fn write_hosts(content: String) -> AppResult<()> {
     let path = get_hosts_path();
     if std::fs::write(path, &content).is_ok() {
         return Ok(());
     }
 
     if cfg!(target_os = "windows") {
-        let temp_path = std::env::temp_dir().join("codexos_hosts_tmp.txt");
-        std::fs::write(&temp_path, &content).map_err(|e| e.to_string())?;
+        let temp_path = std::env::temp_dir().join(format!("codexos_hosts_{}.tmp", std::process::id()));
+        std::fs::write(&temp_path, &content)?;
 
-        let script = format!(
-            "Start-Process powershell -ArgumentList '-NoProfile -Command Copy-Item -Path \"{}\" -Destination \"{}\" -Force' -Verb RunAs -WindowStyle Hidden -Wait",
-            temp_path.to_string_lossy(),
-            path
-        );
+        let temp_str = temp_path.to_string_lossy().to_string();
+        let script = "param($src, $dst) Start-Process powershell -ArgumentList ('-NoProfile -Command Copy-Item -LiteralPath \"' + $src + '\" -Destination \"' + $dst + '\" -Force') -Verb RunAs -WindowStyle Hidden -Wait";
+        let res = run_cli("powershell", &["-NoProfile", "-Command", script, "-src", &temp_str, "-dst", path], None);
 
-        let status = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-Command", &script])
-            .status()
-            .map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&temp_path);
+        let res = res?;
 
-        if status.success() {
+        if res.exit_code == 0 {
             Ok(())
         } else {
-            Err("Failed to acquire Administrator privileges to save hosts file.".to_string())
+            Err(AppError::Command("Failed to acquire Administrator privileges to save hosts file.".to_string()))
         }
     } else {
-        Err("Permission denied: Modifying /etc/hosts requires root privileges (sudo).".to_string())
+        Err(AppError::Command("Permission denied: Modifying /etc/hosts requires root privileges (sudo).".to_string()))
     }
 }
 
+/// Executes the install_font command.
 #[tauri::command]
-pub fn install_font(path: String) -> Result<String, String> {
-    let script = format!(
-        "$FontFolder = (New-Object -ComObject Shell.Application).Namespace(0x14); \
-        $FontFolder.CopyHere(\"{}\")",
-        path.replace("\"", "`\"")
-    );
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-Command", &script])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+pub fn install_font(path: String) -> AppResult<String> {
+    let font_path = std::path::Path::new(&path);
+    if !font_path.exists() || !font_path.is_file() {
+        return Err(AppError::Custom("Font file does not exist".into()));
     }
+    let ext = font_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    if !["ttf", "otf", "fon", "ttc"].contains(&ext.as_str()) {
+        return Err(AppError::Custom("Invalid font format. Expected .ttf, .otf, .fon, or .ttc".into()));
+    }
+    let canonical_path = font_path.canonicalize().map_err(|e| AppError::Custom(format!("Cannot resolve font path: {}", e)))?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
-    Ok("Font installed successfully".to_string())
+    let res = run_cli(
+        "powershell",
+        &[
+            "-NoProfile",
+            "-Command",
+            "param($p) $FontFolder = (New-Object -ComObject Shell.Application).Namespace(0x14); $FontFolder.CopyHere($p)",
+            "-p",
+            &canonical_str,
+        ],
+        None,
+    )?;
+    if res.exit_code == 0 {
+        Ok("Font installed successfully".to_string())
+    } else {
+        Err(AppError::Command(res.stderr))
+    }
 }
 
+/// Executes the execute_command command with workspace sandbox boundary enforcement.
 #[tauri::command]
-pub fn execute_command(command: String, cwd: String) -> Result<String, String> {
-    let output = std::process::Command::new("cmd")
-        .arg("/c")
-        .arg(&command)
-        .current_dir(&cwd)
-        .output()
-        .map_err(|e| format!("Failed to execute command: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if !output.status.success() {
-        return Err(format!("{}\n{}", stdout, stderr));
+pub fn execute_command(
+    command: String,
+    cwd: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<String> {
+    if command.trim().is_empty() {
+        return Err(AppError::Command("Command must not be empty".to_string()));
     }
 
-    Ok(stdout)
+    let p = std::path::Path::new(&cwd);
+    if !cwd.is_empty() {
+        if !p.exists() {
+            return Err(AppError::Command(format!(
+                "Working directory '{}' does not exist.",
+                cwd
+            )));
+        }
+        if !allowed_paths.is_allowed(p) {
+            return Err(AppError::Command(format!(
+                "Access denied: Working directory '{}' is outside allowed workspace boundaries.",
+                cwd
+            )));
+        }
+    }
+
+    let res = if cfg!(target_os = "windows") {
+        run_cli("cmd", &["/c", &command], if cwd.is_empty() { None } else { Some(p) })?
+    } else {
+        run_cli("sh", &["-c", &command], if cwd.is_empty() { None } else { Some(p) })?
+    };
+    
+    if res.exit_code == 0 {
+        Ok(res.stdout)
+    } else {
+        Err(AppError::Command(format!("{}\n{}", res.stdout, res.stderr)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_validate_env_var_name() {
+        assert!(validate_env_var_name("MY_VAR_123").is_ok());
+        assert!(validate_env_var_name("PORT").is_ok());
+        assert!(validate_env_var_name("").is_err());
+        assert!(validate_env_var_name("VAR-WITH-DASH").is_err());
+        assert!(validate_env_var_name("VAR WITH SPACE").is_err());
+        assert!(validate_env_var_name("VAR;rm -rf /").is_err());
+    }
+
+    #[test]
+    fn test_get_hosts_path() {
+        let path = get_hosts_path();
+        #[cfg(target_os = "windows")]
+        assert!(path.contains("drivers\\etc\\hosts"));
+        #[cfg(not(target_os = "windows"))]
+        assert_eq!(path, "/etc/hosts");
+    }
+
+    #[test]
+    fn test_detect_tool_unsupported() {
+        let result = detect_tool("unsupported_tool_xyz_987".to_string());
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_project_tasks_package_json() {
+        let dir = tempdir().unwrap();
+        let pkg_file = dir.path().join("package.json");
+        std::fs::write(&pkg_file, r#"{"scripts": {"build": "tsc", "test": "vitest"}}"#).unwrap();
+
+        let tasks = get_project_tasks(dir.path().to_string_lossy().to_string()).unwrap();
+        assert_eq!(tasks.get("build").unwrap(), "tsc");
+        assert_eq!(tasks.get("test").unwrap(), "vitest");
+    }
+
+    #[test]
+    fn test_get_project_tasks_cargo_and_makefile() {
+        let dir = tempdir().unwrap();
+        let cargo_file = dir.path().join("Cargo.toml");
+        std::fs::write(&cargo_file, "[package]\nname = \"test_pkg\"\nversion = \"0.1.0\"\n").unwrap();
+
+        let make_file = dir.path().join("Makefile");
+        std::fs::write(&make_file, "all:\n\techo all\nclean:\n\trm -rf target\n").unwrap();
+
+        let tasks = get_project_tasks(dir.path().to_string_lossy().to_string()).unwrap();
+        assert!(tasks.contains_key("cargo:build"));
+        assert!(tasks.contains_key("cargo:test"));
+        assert!(tasks.contains_key("make:all"));
+        assert!(tasks.contains_key("make:clean"));
+    }
 }

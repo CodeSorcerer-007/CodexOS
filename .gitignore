@@ -26,6 +26,9 @@ dist-ssr
 # Rust build artifacts
 rustup-init.exe
 target/
+src-tauri/target/
+test-results/
+playwright-report/
 
 # Internal agent scaffolding (not part of the shipped app)
 .agents/

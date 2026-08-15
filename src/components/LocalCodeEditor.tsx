@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { invoke } from '@tauri-apps/api/core';
-import { useStore } from '../store/store';
+import { useStore, useToast } from '../store/store';
 import { Save, FileCode2, TerminalSquare, X, Folder, File } from 'lucide-react';
 import { TerminalPane } from './TerminalMultiplexer';
 
@@ -20,7 +20,7 @@ export const LocalCodeEditor = () => {
   const closeFile = useStore(s => s.closeFile);
   const setSelectedFile = useStore(s => s.setSelectedFile);
   const shell = useStore(s => s.settings.terminalShell);
-  const { addToast } = useStore.getState();
+  const { success: toastSuccess, error: toastError } = useToast();
   
   const [content, setContent] = useState('');
   const [language, setLanguage] = useState('javascript');
@@ -43,7 +43,7 @@ export const LocalCodeEditor = () => {
           .catch(e => console.error(e));
       }
     } else {
-      invoke<FileInfo[]>('list_dir', { path: currentPath })
+      invoke<FileInfo[]>('get_files_in_dir', { path: currentPath })
         .then(setFiles)
         .catch(e => console.error(e));
     }
@@ -57,13 +57,23 @@ export const LocalCodeEditor = () => {
     }
     
     // detect language
-    if (selectedFile.endsWith('.ts') || selectedFile.endsWith('.tsx')) setLanguage('typescript');
-    else if (selectedFile.endsWith('.rs')) setLanguage('rust');
-    else if (selectedFile.endsWith('.json')) setLanguage('json');
-    else if (selectedFile.endsWith('.md')) setLanguage('markdown');
-    else if (selectedFile.endsWith('.html')) setLanguage('html');
-    else if (selectedFile.endsWith('.css')) setLanguage('css');
-    else setLanguage('javascript');
+    const lower = selectedFile.toLowerCase();
+    if (lower.endsWith('.ts') || lower.endsWith('.tsx')) setLanguage('typescript');
+    else if (lower.endsWith('.js') || lower.endsWith('.jsx') || lower.endsWith('.mjs')) setLanguage('javascript');
+    else if (lower.endsWith('.rs')) setLanguage('rust');
+    else if (lower.endsWith('.py')) setLanguage('python');
+    else if (lower.endsWith('.sql')) setLanguage('sql');
+    else if (lower.endsWith('.sh') || lower.endsWith('.bash') || lower.endsWith('.zsh')) setLanguage('shell');
+    else if (lower.endsWith('.yaml') || lower.endsWith('.yml')) setLanguage('yaml');
+    else if (lower.endsWith('.toml')) setLanguage('ini');
+    else if (lower.endsWith('.json')) setLanguage('json');
+    else if (lower.endsWith('.md')) setLanguage('markdown');
+    else if (lower.endsWith('.html') || lower.endsWith('.htm')) setLanguage('html');
+    else if (lower.endsWith('.css') || lower.endsWith('.scss')) setLanguage('css');
+    else if (lower.endsWith('.cpp') || lower.endsWith('.cc') || lower.endsWith('.c') || lower.endsWith('.h') || lower.endsWith('.hpp')) setLanguage('cpp');
+    else if (lower.endsWith('.go')) setLanguage('go');
+    else if (lower.endsWith('.xml') || lower.endsWith('.svg')) setLanguage('xml');
+    else setLanguage('plaintext');
 
     if (selectedFile.startsWith('ssh://')) {
       const withoutPrefix = selectedFile.replace('ssh://', '');
@@ -97,9 +107,9 @@ export const LocalCodeEditor = () => {
       } else {
         await invoke('write_file_text', { path: selectedFile, content });
       }
-      addToast({ type: 'success', title: 'File saved' });
+      toastSuccess('File saved', selectedFile.split(/[/\\]/).pop() || selectedFile);
     } catch (e: unknown) {
-      addToast({ type: 'error', title: 'Save failed', message: String(e) });
+      toastError('Save failed', e instanceof Error ? e.message : String(e));
     } finally {
       setIsSaving(false);
     }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { TerminalPane } from './TerminalMultiplexer';
-import { Play, Square, Plus, Settings, TerminalSquare, Trash2 } from 'lucide-react';
+import { Play, Square, Plus, Settings, TerminalSquare, Trash2, Search } from 'lucide-react';
 import { useStore } from '../store/store';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -16,8 +16,9 @@ export const ProcessManager = () => {
   const shell = useStore(s => s.settings.terminalShell);
   const [processes, setProcesses] = useState<Process[]>([]);
   const [selectedProcessId, setSelectedProcessId] = useState<string | null>(null);
+  const [filterQuery, setFilterQuery] = useState('');
 
-  // Load from local storage for now (should be KV store ideally, but for Phase 2 this is quick)
+  // Load from local storage
   useEffect(() => {
     const saved = localStorage.getItem('codexos-processes');
     if (saved) {
@@ -42,7 +43,10 @@ export const ProcessManager = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (processes.find(p => p.id === id)?.isRunning) {
+    const proc = processes.find(p => p.id === id);
+    if (proc?.isRunning) {
+      const confirmed = window.confirm(`Process "${proc.name}" is currently running. Stop and remove it?`);
+      if (!confirmed) return;
       handleStop(id);
     }
     setProcesses(processes.filter(p => p.id !== id));
@@ -66,20 +70,45 @@ export const ProcessManager = () => {
     setProcesses(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
   };
 
+  const filteredProcesses = processes.filter(p => 
+    p.name.toLowerCase().includes(filterQuery.toLowerCase()) || 
+    p.command.toLowerCase().includes(filterQuery.toLowerCase())
+  );
+
+  const runningCount = processes.filter(p => p.isRunning).length;
   const selectedProcess = processes.find(p => p.id === selectedProcessId);
 
   return (
     <div className="flex h-full w-full bg-[#050505] text-white">
       {/* Sidebar List */}
       <div className="w-64 border-r border-white/10 bg-[#0a0f18] flex flex-col p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-cyan-400">Processes</h2>
-          <button onClick={handleAdd} className="p-1 hover:bg-white/10 rounded">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="font-bold text-cyan-400">Processes</h2>
+            {runningCount > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/30 rounded-full">
+                {runningCount} active
+              </span>
+            )}
+          </div>
+          <button onClick={handleAdd} className="p-1 hover:bg-white/10 rounded transition-colors text-cyan-300" title="Add process">
             <Plus className="w-4 h-4" />
           </button>
         </div>
+
+        <div className="relative mb-3">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-gray-500" />
+          <input 
+            type="text"
+            placeholder="Filter processes..."
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            className="w-full bg-black/50 text-xs pl-8 pr-2 py-1.5 rounded border border-white/10 outline-none focus:border-cyan-500 text-gray-200"
+          />
+        </div>
+
         <div className="flex-1 flex flex-col gap-2 overflow-y-auto no-scrollbar">
-          {processes.map(p => (
+          {filteredProcesses.map(p => (
             <div 
               key={p.id}
               onClick={() => setSelectedProcessId(p.id)}
@@ -87,14 +116,16 @@ export const ProcessManager = () => {
                 ${selectedProcessId === p.id ? 'bg-cyan-500/20 border-cyan-500/50' : 'bg-black/40 border-white/10 hover:border-white/30'}
               `}
             >
-              <div className="flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full ${p.isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-                <span className="font-medium text-sm truncate w-32">{p.name}</span>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-2 h-2 shrink-0 rounded-full ${p.isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
+                <span className="font-medium text-sm truncate">{p.name || 'Unnamed Task'}</span>
               </div>
             </div>
           ))}
-          {processes.length === 0 && (
-            <div className="text-gray-500 text-sm text-center mt-10">No processes defined. Click + to add one.</div>
+          {filteredProcesses.length === 0 && (
+            <div className="text-gray-500 text-sm text-center mt-10">
+              {filterQuery ? 'No matching processes.' : 'No processes defined. Click + to add one.'}
+            </div>
           )}
         </div>
       </div>
@@ -110,6 +141,7 @@ export const ProcessManager = () => {
                     type="text" 
                     value={selectedProcess.name}
                     onChange={(e) => updateProcess(selectedProcess.id, { name: e.target.value })}
+                    placeholder="Task Name"
                     className="bg-transparent text-2xl font-bold text-white border-b border-transparent hover:border-white/20 focus:border-cyan-500 outline-none w-full mb-2"
                   />
                   <div className="flex items-center gap-2">
@@ -124,7 +156,7 @@ export const ProcessManager = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => handleDelete(selectedProcess.id)} className="p-2 text-gray-500 hover:text-red-400 bg-white/5 hover:bg-white/10 rounded mr-4">
+                  <button onClick={() => handleDelete(selectedProcess.id)} className="p-2 text-gray-500 hover:text-red-400 bg-white/5 hover:bg-white/10 rounded mr-4 transition-colors" title="Delete process">
                     <Trash2 className="w-5 h-5" />
                   </button>
 
@@ -150,8 +182,6 @@ export const ProcessManager = () => {
             <div className="flex-1 bg-black p-4 relative">
               <div className="absolute top-0 right-0 p-2 text-xs text-gray-600 font-mono">ID: {selectedProcess.id}</div>
               {selectedProcess.isRunning ? (
-                // Use a unique ID based on the process ID
-                // We add a key to force re-render when it starts
                 <TerminalPane 
                   key={`term-${selectedProcess.id}-${Date.now()}`} 
                   id={`proc-${selectedProcess.id}`} 

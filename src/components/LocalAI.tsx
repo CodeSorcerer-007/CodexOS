@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { Bot, Send, User, Zap, AlertCircle } from 'lucide-react';
+import { Bot, Send, User, Zap, AlertCircle, Trash2, Copy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useStore } from '../store/store';
+import { useStore, useToast } from '../store/store';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -20,6 +20,7 @@ export const LocalAI = () => {
   const [error, setError] = useState<string | null>(null);
   const [useContext, setUseContext] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { success: toastSuccess } = useToast();
   
   const selectedFile = useStore(state => state.selectedFile);
 
@@ -82,6 +83,17 @@ export const LocalAI = () => {
     }
   };
 
+  const handleClearChat = () => {
+    setMessages([
+      { role: 'assistant', content: 'Conversation cleared. How can I assist you?' }
+    ]);
+  };
+
+  const handleCopyMessage = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toastSuccess('Copied', 'Message copied to clipboard.');
+  };
+
   return (
     <div className="flex flex-col h-full w-full bg-[#0a0f18] text-white">
       {/* Header */}
@@ -94,7 +106,7 @@ export const LocalAI = () => {
           </span>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">Model</span>
           <select 
             value={model}
@@ -105,6 +117,13 @@ export const LocalAI = () => {
             <option value="codellama">CodeLlama</option>
             <option value="mistral">Mistral</option>
           </select>
+          <button
+            onClick={handleClearChat}
+            className="p-1.5 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
+            title="Clear Chat"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -126,12 +145,21 @@ export const LocalAI = () => {
               >
                 {msg.role === 'user' ? <User size={20} /> : <Bot size={20} />}
               </div>
-              <div className={`px-5 py-3 rounded-2xl whitespace-pre-wrap font-mono text-sm shadow-lg
+              <div className={`group relative px-5 py-3 rounded-2xl whitespace-pre-wrap font-mono text-sm shadow-lg
                 ${msg.role === 'user' ? 'bg-indigo-600/20 border border-indigo-500/30 text-indigo-100' : 'bg-black/50 border border-white/10 text-gray-300'}`}
               >
                 {msg.content}
                 {isGenerating && i === messages.length - 1 && msg.role === 'assistant' && (
                   <span className="inline-block w-2 h-4 ml-1 bg-yellow-500 animate-pulse align-middle" />
+                )}
+                {msg.content && (
+                  <button
+                    onClick={() => handleCopyMessage(msg.content)}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 bg-black/40 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-opacity"
+                    title="Copy message"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
             </motion.div>

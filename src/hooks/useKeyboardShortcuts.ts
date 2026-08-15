@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useStore } from '../store/store';
-import type { Tab } from '../App';
+import type { Tab } from '../types/tabs';
+import { SIDEBAR_ITEMS } from '../components/layout/Sidebar';
 
 export const useKeyboardShortcuts = () => {
   const setActiveApp = useStore(s => s.setActiveApp);
@@ -22,11 +23,10 @@ export const useKeyboardShortcuts = () => {
       
       // Global navigation shortcuts (Ctrl+Number)
       if (ctrl && !shift) {
-        const numMap: Record<string, string> = {
-          '1': 'home', '2': 'files', '3': 'git', '4': 'terminal',
-          '5': 'secrets', '6': 'tunnel', '7': 'network', '8': 'docker',
-          '9': 'database',
-        };
+        const numMap: Record<string, string> = {};
+        SIDEBAR_ITEMS.slice(0, 9).forEach((item, index) => {
+          numMap[String(index + 1)] = item.id;
+        });
         
         if (numMap[e.key] && !isVaultLocked) {
           e.preventDefault();

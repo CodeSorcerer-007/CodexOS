@@ -1,8 +1,19 @@
 use ring::rand::SecureRandom;
 use ring::{hmac, rand};
 
+use crate::error::AppResult;
+
+const MAX_VAULT_DATA_BYTES: usize = 50 * 1024 * 1024; // 50 MB
+
 #[tauri::command]
-pub fn generate_hmac_proof(vault_data: String, secret_key: String) -> Result<String, String> {
+pub fn generate_hmac_proof(vault_data: String, secret_key: String) -> AppResult<String> {
+    if secret_key.trim().is_empty() {
+        return Err(crate::error::AppError::Custom("HMAC secret key cannot be empty".to_string()));
+    }
+    if vault_data.len() > MAX_VAULT_DATA_BYTES {
+        return Err(crate::error::AppError::Custom("Vault payload exceeds maximum size limit (50 MB)".to_string()));
+    }
+
     // Generate a secure random nonce
     let rng = rand::SystemRandom::new();
     let mut nonce = [0u8; 16];
@@ -28,10 +39,17 @@ pub fn verify_hmac_proof(
     proof_hash: String,
     expected_vault_data: String,
     secret_key: String,
-) -> Result<bool, String> {
+) -> AppResult<bool> {
+    if secret_key.trim().is_empty() {
+        return Err(crate::error::AppError::Custom("HMAC verification key cannot be empty".to_string()));
+    }
+    if expected_vault_data.len() > MAX_VAULT_DATA_BYTES {
+        return Err(crate::error::AppError::Custom("Expected vault payload exceeds maximum size limit (50 MB)".to_string()));
+    }
+
     let parts: Vec<&str> = proof_hash.split(':').collect();
     if parts.len() != 2 {
-        return Err("Invalid proof format".to_string());
+        return Err(crate::error::AppError::Custom("Invalid proof format".to_string()));
     }
 
     let nonce = hex::decode(parts[0]).map_err(|_| "Invalid nonce encoding")?;
@@ -46,24 +64,6 @@ pub fn verify_hmac_proof(
     match hmac::verify(&key, &combined_data, &signature_bytes) {
         Ok(_) => Ok(true),
         Err(_) => Ok(false),
-    }
-}
-
-// Add a hex module since we don't have the crate installed
-mod hex {
-    pub fn encode(data: impl AsRef<[u8]>) -> String {
-        data.as_ref().iter().map(|b| format!("{:02x}", b)).collect()
-    }
-
-    pub fn decode(s: &str) -> Result<Vec<u8>, ()> {
-        if s.len() % 2 != 0 {
-            return Err(());
-        }
-        let mut out = Vec::with_capacity(s.len() / 2);
-        for i in (0..s.len()).step_by(2) {
-            out.push(u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| ())?);
-        }
-        Ok(out)
     }
 }
 
@@ -93,5 +93,11 @@ mod tests {
         let wrong_key = "MyPrivateKey124".to_string();
         let is_invalid_key = verify_hmac_proof(proof, vault, wrong_key).unwrap();
         assert!(!is_invalid_key, "Wrong key should fail verification");
+    }
+
+    #[test]
+    fn test_empty_key_fails() {
+        assert!(generate_hmac_proof("data".to_string(), "".to_string()).is_err());
+        assert!(verify_hmac_proof("aa:bb".to_string(), "data".to_string(), "".to_string()).is_err());
     }
 }

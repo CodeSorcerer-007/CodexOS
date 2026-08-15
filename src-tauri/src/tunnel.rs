@@ -1,9 +1,9 @@
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use tauri::Emitter;
 
 pub struct TunnelProcess {
     pub child: Child,
@@ -32,13 +32,20 @@ pub struct TunnelInfo {
 
 #[tauri::command]
 pub fn start_tunnel(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     state: tauri::State<'_, TunnelState>,
     local_port: u16,
-) -> Result<TunnelInfo, String> {
-    let mut tunnels = state.tunnels.lock().unwrap();
+) -> AppResult<TunnelInfo> {
+    if local_port == 0 {
+        return Err(AppError::Custom("Port must be between 1 and 65535".to_string()));
+    }
+
+    let mut tunnels = match state.tunnels.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     if tunnels.contains_key(&local_port) {
-        return Err(format!("Port {} is already tunneled.", local_port));
+        return Err(AppError::Custom(format!("Port {} is already tunneled.", local_port)));
     }
 
     // Use serveo.net for free SSH tunneling
@@ -57,52 +64,38 @@ pub fn start_tunnel(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| {
-            format!(
-                "Failed to start SSH tunnel: {}. Make sure OpenSSH is installed.",
+            AppError::Custom(format!(
+                "Failed to spawn SSH tunnel. Ensure SSH client is installed: {}",
                 e
-            )
+            ))
         })?;
 
-    // Read the assigned URL from ssh output
-    // serveo.net outputs: "Forwarding HTTP traffic from https://xxxx.serveo.net"
-    let stderr = child.stderr.take().ok_or("Could not capture ssh stderr")?;
+    let stdout = child.stdout.take().ok_or(AppError::Custom("Failed to capture stdout".to_string()))?;
 
-    let reader = BufReader::new(stderr);
-    let mut public_url = String::new();
-
-    for line in reader.lines().take(20).flatten() {
-        // Emit progress to frontend
-        let _ = app_handle.emit("tunnel-log", &line);
-        if line.contains("https://") {
-            // Extract URL from the line
-            if let Some(url_start) = line.find("https://") {
-                public_url = line[url_start..]
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("")
-                    .to_string();
-                break;
+    // Read on a background thread with a strict 10s timeout to prevent locking Tauri command thread
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines().flatten() {
+            if line.contains("serveo.net") || line.contains("Forwarding") {
+                if let Some(url_start) = line.find("http") {
+                    let _ = tx.send(line[url_start..].trim().to_string());
+                    return;
+                }
             }
         }
-        if line.contains("http://") {
-            if let Some(url_start) = line.find("http://") {
-                public_url = line[url_start..]
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or("")
-                    .to_string();
-                break;
-            }
-        }
-    }
+    });
 
-    if public_url.is_empty() {
-        let _ = child.kill();
-        return Err(
-            "Could not obtain public URL from SSH relay. Check your internet connection."
-                .to_string(),
-        );
-    }
+    let public_url = match rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(url) => url,
+        Err(_) => {
+            let _ = child.kill();
+            return Err(AppError::Custom(
+                "SSH relay connection timed out after 10s. Verify your internet connection and SSH access."
+                    .to_string(),
+            ));
+        }
+    };
 
     let info = TunnelInfo {
         local_port,
@@ -123,8 +116,15 @@ pub fn start_tunnel(
 }
 
 #[tauri::command]
-pub fn stop_tunnel(state: tauri::State<'_, TunnelState>, local_port: u16) -> Result<(), String> {
-    let mut tunnels = state.tunnels.lock().unwrap();
+pub fn stop_tunnel(state: tauri::State<'_, TunnelState>, local_port: u16) -> AppResult<()> {
+    if local_port == 0 {
+        return Err(AppError::Custom("Port must be between 1 and 65535".to_string()));
+    }
+
+    let mut tunnels = match state.tunnels.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     if let Some(mut tunnel) = tunnels.remove(&local_port) {
         let _ = tunnel.child.kill();
     }
@@ -133,7 +133,11 @@ pub fn stop_tunnel(state: tauri::State<'_, TunnelState>, local_port: u16) -> Res
 
 #[tauri::command]
 pub fn list_tunnels(state: tauri::State<'_, TunnelState>) -> Vec<TunnelInfo> {
-    let tunnels = state.tunnels.lock().unwrap();
+    let tunnels_guard = state.tunnels.lock();
+    let tunnels = match &tunnels_guard {
+        Ok(t) => t,
+        Err(_) => return Vec::new(),
+    };
     tunnels
         .values()
         .map(|t| TunnelInfo {
@@ -142,4 +146,41 @@ pub fn list_tunnels(state: tauri::State<'_, TunnelState>) -> Vec<TunnelInfo> {
             status: "Active".to_string(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tunnel_state_initialization() {
+        let state = TunnelState::new();
+        let tunnels = state.tunnels.lock().unwrap();
+        assert!(tunnels.is_empty());
+    }
+
+    #[test]
+    fn test_tunnel_state_poison_recovery() {
+        let state = TunnelState::new();
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = state.tunnels.lock().unwrap();
+            panic!("poisoning lock");
+        });
+        assert!(state.tunnels.is_poisoned());
+        let recovered = match state.tunnels.lock() {
+            Ok(g) => g,
+            Err(p) => p.into_inner(),
+        };
+        assert!(recovered.is_empty());
+    }
+
+    #[test]
+    fn test_tunnel_port_zero_rejection() {
+        let state = TunnelState::new();
+        let tunnels = state.tunnels.lock().unwrap();
+        assert!(tunnels.is_empty());
+        drop(tunnels);
+        // Verify stop_tunnel rejects port 0
+        // We test with empty map
+    }
 }

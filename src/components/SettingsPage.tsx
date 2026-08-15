@@ -71,11 +71,12 @@ export const SettingsPage = () => {
           
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-bold text-gray-400">Default Startup Path</label>
+              <label htmlFor="default-startup-path" className="block text-sm font-bold text-gray-400">Default Startup Path</label>
               {pathValid === true && <span className="text-xs font-bold text-green-400">✓ Path Exists</span>}
               {pathValid === false && <span className="text-xs font-bold text-red-400">✕ Path Not Found</span>}
             </div>
             <input 
+              id="default-startup-path"
               type="text" 
               value={settings.defaultPath || ''}
               onChange={e => handlePathChange(e.target.value)}
@@ -85,8 +86,9 @@ export const SettingsPage = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-400 mb-2">Terminal Shell</label>
+            <label htmlFor="terminal-shell-select" className="block text-sm font-bold text-gray-400 mb-2">Terminal Shell</label>
             <select 
+              id="terminal-shell-select"
               value={settings.terminalShell || 'powershell'}
               onChange={e => updateSettings({ terminalShell: e.target.value as 'powershell' | 'cmd' | 'wsl' })}
               className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm focus:border-indigo-500 outline-none"
@@ -98,8 +100,9 @@ export const SettingsPage = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-gray-400 mb-2">Theme</label>
+            <label htmlFor="theme-select" className="block text-sm font-bold text-gray-400 mb-2">Theme</label>
             <select 
+              id="theme-select"
               value={settings.theme || 'dark'}
               onChange={e => updateSettings({ theme: e.target.value as 'dark' | 'light' })}
               className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm focus:border-indigo-500 outline-none"
@@ -118,11 +121,13 @@ export const SettingsPage = () => {
           {/* Enable / disable toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-bold text-gray-400">Enable AI Copilot</label>
+              <label id="enable-ai-copilot-label" className="block text-sm font-bold text-gray-400">Enable AI Copilot</label>
               <p className="text-xs text-gray-500 mt-0.5">Automatically diagnose terminal errors, memory spikes, and network failures</p>
             </div>
             <button
+              id="enable-ai-copilot-toggle"
               role="switch"
+              aria-labelledby="enable-ai-copilot-label"
               aria-checked={settings.aiCopilotEnabled}
               onClick={() => handleCopilotToggle(!settings.aiCopilotEnabled)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
@@ -139,7 +144,7 @@ export const SettingsPage = () => {
 
           {/* API key status indicator */}
           <div className="flex items-center justify-between">
-            <label className="block text-sm font-bold text-gray-400">Mistral API Key</label>
+            <span className="block text-sm font-bold text-gray-400">Mistral API Key</span>
             {copilotConfigured === null ? null : copilotConfigured ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30">
                 ✓ API Key Configured
@@ -156,10 +161,11 @@ export const SettingsPage = () => {
 
           {/* Memory spike threshold */}
           <div>
-            <label className="block text-sm font-bold text-gray-400 mb-2">
+            <label htmlFor="memory-spike-threshold" className="block text-sm font-bold text-gray-400 mb-2">
               Memory Spike Threshold (MB)
             </label>
             <input
+              id="memory-spike-threshold"
               type="number"
               min={1}
               defaultValue={settings.memorySpikeThresholdMb}
@@ -175,10 +181,11 @@ export const SettingsPage = () => {
 
           {/* Memory spike window */}
           <div>
-            <label className="block text-sm font-bold text-gray-400 mb-2">
+            <label htmlFor="memory-spike-window" className="block text-sm font-bold text-gray-400 mb-2">
               Memory Spike Window (seconds)
             </label>
             <input
+              id="memory-spike-window"
               type="number"
               min={1}
               defaultValue={settings.memorySpikeWindowSec}

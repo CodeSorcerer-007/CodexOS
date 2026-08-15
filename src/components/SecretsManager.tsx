@@ -65,7 +65,11 @@ export const SecretsManager = () => {
       for (const line of lines) {
         const [key, ...valueParts] = line.split('=');
         if (key && key.trim()) {
-          await invoke('add_secret', { key: key.trim(), value: valueParts.join('=').trim() });
+          let val = valueParts.join('=').trim();
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          await invoke('add_secret', { key: key.trim(), value: val });
           imported++;
         }
       }
@@ -103,6 +107,14 @@ export const SecretsManager = () => {
     });
   }, []);
 
+  const selectAllKeys = () => {
+    setSelectedKeys([...keys]);
+  };
+
+  const clearSelectedKeys = () => {
+    setSelectedKeys([]);
+  };
+
   const executeCmd = async () => {
     setCmdOutput('Executing...');
     try {
@@ -117,25 +129,19 @@ export const SecretsManager = () => {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full bg-[#050505] text-white overflow-hidden">
-      <VaultUnlock />
-      
-      {/* Secrets Manager List */}
-      <div className="w-full md:w-1/2 p-8 overflow-y-auto flex flex-col">
-        <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col">
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 flex items-center justify-center">
-            <Lock className="text-indigo-400" size={24} />
-          </div>
+    <div className="flex flex-col md:flex-row h-full w-full bg-[#0a0f18] text-white">
+      {/* Vault List / Management */}
+      <div className="w-full md:w-1/2 p-8 flex flex-col gap-6 overflow-y-auto">
+        <div className="flex justify-between items-center">
           <div>
-            <h2 className="font-bold text-2xl">Secrets Manager</h2>
-            <div className="flex items-center gap-1 bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-0.5 rounded text-xs font-bold w-fit mt-1">
-              <Lock size={12} />
-              Secured by OS Keyring
-            </div>
+            <h2 className="font-bold text-yellow-500 text-xl flex items-center gap-2 mb-1">
+              <Lock className="w-5 h-5" /> Secrets Manager
+            </h2>
+            <p className="text-sm text-gray-400">Manage encrypted secrets stored securely in your system keyring.</p>
           </div>
-          <p className="text-sm text-gray-400">Store API keys safely using native OS persistence. No plaintext `.env` files lying around.</p>
         </div>
+
+        <VaultUnlock />
 
         <div className="flex gap-2">
           <button 
@@ -197,7 +203,6 @@ export const SecretsManager = () => {
           ))}
           {keys.length === 0 && <div className="text-gray-500 text-sm italic">No secrets in vault. Import a .env file or add one manually.</div>}
         </div>
-        </div>
       </div>
 
       {/* Script Injector */}
@@ -215,7 +220,16 @@ export const SecretsManager = () => {
             className="w-full bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-yellow-500 focus:outline-none h-24 mb-4"
           />
 
-          <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Required Secrets (Will be injected)</label>
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">Required Secrets (Will be injected)</label>
+            {keys.length > 0 && (
+              <div className="flex gap-2 text-xs">
+                <button onClick={selectAllKeys} className="text-yellow-400 hover:underline">Select All</button>
+                <span className="text-gray-600">|</span>
+                <button onClick={clearSelectedKeys} className="text-gray-400 hover:underline">Clear</button>
+              </div>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2 mb-6">
             {keys.map(k => (
               <button 

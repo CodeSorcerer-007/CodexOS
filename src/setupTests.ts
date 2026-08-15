@@ -34,9 +34,9 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-// ResizeObserver stub (used by xterm, Monaco, ReactFlow)
-globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+// ResizeObserver stub (used by xterm, Monaco, ReactFlow, Recharts)
+globalThis.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};

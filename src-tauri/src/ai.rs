@@ -1,3 +1,4 @@
+use crate::error::{AppError, AppResult};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -12,9 +13,13 @@ use crate::secrets::{self, SecretsState};
 use crate::sys::SysState;
 
 const MISTRAL_API_KEY: &str = "MISTRAL_API_KEY";
+const MISTRAL_API_URL: &str = "https://api.mistral.ai/v1/chat/completions";
+const MISTRAL_MODEL: &str = "mistral-small-latest";
 const MAX_CONTEXT_CHARS: usize = 16_000; // ~4000 tokens
 const RATE_LIMIT_SECS: u64 = 10;
 const REQUEST_TIMEOUT_SECS: u64 = 15;
+const MAX_PROMPT_CHARS: usize = 500_000;
+const MAX_DIAGNOSIS_CACHE_ENTRIES: usize = 100;
 
 // ── Ollama (existing) ──────────────────────────────────────────────────────
 
@@ -36,25 +41,47 @@ struct OllamaResponse {
 
 #[tauri::command]
 pub async fn query_ollama(
+    app_handle: tauri::AppHandle,
     model: String,
     prompt: String,
-    app_handle: AppHandle,
-) -> Result<(), String> {
+    diagnosis_state: State<'_, DiagnosisState>,
+) -> AppResult<()> {
     use futures::StreamExt;
 
-    let client = Client::new();
+    let trimmed_model = model.trim();
+    if trimmed_model.is_empty() {
+        return Err(AppError::Custom("Model name cannot be empty".to_string()));
+    }
+    if prompt.len() > MAX_PROMPT_CHARS {
+        return Err(AppError::Custom(format!(
+            "Prompt exceeds maximum allowed length ({} characters)",
+            MAX_PROMPT_CHARS
+        )));
+    }
+
     let req_body = OllamaRequest {
-        model: model.clone(),
+        model: trimmed_model.to_string(),
         prompt,
         stream: true,
     };
 
-    let res = client
+    let res = diagnosis_state
+        .client
         .post("http://localhost:11434/api/generate")
         .json(&req_body)
         .send()
         .await
         .map_err(|e| format!("Failed to connect to Ollama (is it running?): {}", e))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let err_body = res.text().await.unwrap_or_default();
+        return Err(AppError::Custom(format!(
+            "Ollama server error (HTTP {}): {}",
+            status,
+            err_body.trim()
+        )));
+    }
 
     let mut stream = res.bytes_stream();
 
@@ -107,6 +134,8 @@ pub struct Diagnosis {
     pub suggested_fix: String,
     pub related_files: Vec<String>,
 }
+
+pub type DiagnosisReport = Diagnosis;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct MistralMessage {
@@ -175,15 +204,23 @@ fn cache_key(trigger: &DiagnosticTrigger) -> String {
     }
 }
 
+use crate::util::BoundedLruCache;
+
 pub struct DiagnosisState {
-    cache: Mutex<HashMap<String, Diagnosis>>,
+    pub client: Client,
+    cache: Mutex<BoundedLruCache<String, Diagnosis>>,
     last_request: Mutex<HashMap<TriggerKind, Instant>>,
 }
 
 impl DiagnosisState {
     pub fn new() -> Self {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self {
-            cache: Mutex::new(HashMap::new()),
+            client,
+            cache: Mutex::new(BoundedLruCache::new(MAX_DIAGNOSIS_CACHE_ENTRIES)),
             last_request: Mutex::new(HashMap::new()),
         }
     }
@@ -212,7 +249,7 @@ impl ContextBundle {
 
         // Truncate oldest terminal lines first when over budget
         while total > MAX_CONTEXT_CHARS {
-            if let Some((label, content)) =
+            if let Some((_label, content)) =
                 sections.iter_mut().find(|(l, _)| l == "Terminal Output")
             {
                 let lines: Vec<&str> = content.lines().collect();
@@ -233,11 +270,28 @@ impl ContextBundle {
             result.push_str(&format!("## {}\n{}\n\n", label, content));
         }
         if result.len() > MAX_CONTEXT_CHARS {
-            result.truncate(MAX_CONTEXT_CHARS);
-            result.push_str("\n...(truncated)");
+            const TRUNC_MSG: &str = "\n...(truncated)";
+            let limit = MAX_CONTEXT_CHARS.saturating_sub(TRUNC_MSG.len());
+            let mut byte_idx = limit;
+            while byte_idx > 0 && !result.is_char_boundary(byte_idx) {
+                byte_idx -= 1;
+            }
+            result.truncate(byte_idx);
+            result.push_str(TRUNC_MSG);
         }
         result
     }
+}
+
+fn truncate_to_char_boundary(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    let mut limit = max_bytes;
+    while limit > 0 && !s.is_char_boundary(limit) {
+        limit -= 1;
+    }
+    &s[..limit]
 }
 
 async fn gather_context(
@@ -285,7 +339,7 @@ async fn gather_context(
             // and can be slow on loaded machines).
             let sys_state_mutex = sys_state.0.clone();
             let (stats, top) = tokio::task::spawn_blocking(move || {
-                let mut sys = sys_state_mutex.lock().unwrap();
+                let mut sys = sys_state_mutex.lock().unwrap_or_else(|e| e.into_inner());
                 sys.refresh_all();
                 let stats = format!(
                     "System memory: {} MB used / {} MB total\nCPU: {:.1}%",
@@ -293,11 +347,11 @@ async fn gather_context(
                     sys.total_memory() / 1024 / 1024,
                     sys.cpus().iter().map(|c| c.cpu_usage()).sum::<f32>() / sys.cpus().len() as f32
                 );
-                sys.refresh_processes();
+                sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
                 let mut procs: Vec<(String, u32, u64)> = sys
                     .processes()
                     .iter()
-                    .map(|(pid, proc)| (proc.name().to_string(), pid.as_u32(), proc.memory()))
+                    .map(|(pid, proc)| (proc.name().to_string_lossy().to_string(), pid.as_u32(), proc.memory()))
                     .collect();
                 // Sort descending by memory so "top 10" is actually the top 10.
                 procs.sort_by_key(|(_, _, mem)| std::cmp::Reverse(*mem));
@@ -323,12 +377,12 @@ async fn gather_context(
         } => {
             if let Some(req) = proxy::get_request_by_id(app, *request_id) {
                 let body_preview = if req.response_body.len() > 2000 {
-                    format!("{}...(truncated)", &req.response_body[..2000])
+                    format!("{}...(truncated)", truncate_to_char_boundary(&req.response_body, 2000))
                 } else {
                     req.response_body.clone()
                 };
                 let req_body_preview = if req.request_body.len() > 1000 {
-                    format!("{}...(truncated)", &req.request_body[..1000])
+                    format!("{}...(truncated)", truncate_to_char_boundary(&req.request_body, 1000))
                 } else {
                     req.request_body.clone()
                 };
@@ -358,7 +412,7 @@ async fn gather_context(
     if let Some(path) = repo_path {
         if let Ok(diff) = crate::git::get_recent_commit_diff_internal(path) {
             let diff_preview = if diff.len() > 8000 {
-                format!("{}...(truncated)", &diff[..8000])
+                format!("{}...(truncated)", truncate_to_char_boundary(&diff, 8000))
             } else {
                 diff
             };
@@ -369,7 +423,7 @@ async fn gather_context(
     ctx
 }
 
-fn parse_diagnosis_json(raw: &str) -> Result<Diagnosis, String> {
+fn parse_diagnosis_json(raw: &str) -> AppResult<Diagnosis> {
     // Try direct parse first
     if let Ok(d) = serde_json::from_str::<Diagnosis>(raw) {
         return Ok(d);
@@ -384,23 +438,18 @@ fn parse_diagnosis_json(raw: &str) -> Result<Diagnosis, String> {
         .trim();
 
     serde_json::from_str::<Diagnosis>(cleaned)
-        .map_err(|e| format!("Invalid response format: {}", e))
+        .map_err(|e| format!("Invalid response format: {}", e).into())
 }
 
-async fn call_mistral(api_key: &str, context: &str) -> Result<Diagnosis, String> {
+async fn call_mistral(client: &Client, api_key: &str, context: &str) -> AppResult<Diagnosis> {
     let system_prompt = "You are a root-cause diagnostic assistant embedded in a developer \
         tool. Given terminal output, git diffs, memory data, and/or network traces, \
         identify the most likely cause of the failure. Respond ONLY in JSON: \
         { \"cause\": string, \"confidence\": \"high\"|\"medium\"|\"low\", \
         \"explanation\": string, \"suggested_fix\": string, \"related_files\": string[] }";
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
-        .build()
-        .map_err(|e| format!("HTTP client error: {}", e))?;
-
-    let req = MistralRequest {
-        model: "mistral-large-latest".to_string(),
+    let request_payload = MistralRequest {
+        model: MISTRAL_MODEL.to_string(),
         messages: vec![
             MistralMessage {
                 role: "system".to_string(),
@@ -408,7 +457,7 @@ async fn call_mistral(api_key: &str, context: &str) -> Result<Diagnosis, String>
             },
             MistralMessage {
                 role: "user".to_string(),
-                content: format!("Diagnose the following failure context:\n\n{}", context),
+                content: context.to_string(),
             },
         ],
         response_format: ResponseFormat {
@@ -416,39 +465,26 @@ async fn call_mistral(api_key: &str, context: &str) -> Result<Diagnosis, String>
         },
     };
 
-    let res = client
-        .post("https://api.mistral.ai/v1/chat/completions")
+    let response = client
+        .post(MISTRAL_API_URL)
         .header("Authorization", format!("Bearer {}", api_key))
-        .json(&req)
+        .header("Content-Type", "application/json")
+        .json(&request_payload)
         .send()
         .await
-        .map_err(|e| {
-            if e.is_timeout() {
-                "Request timed out after 15 seconds".to_string()
-            } else {
-                format!("Network error: {}", e)
-            }
-        })?;
+        .map_err(AppError::from)?;
 
-    if !res.status().is_success() {
-        let status = res.status();
-        let body = res.text().await.unwrap_or_default();
-        if status.as_u16() == 429 {
-            return Err("Rate limited by Mistral API".to_string());
-        }
-        return Err(format!(
-            "API returned status {} — {}",
-            status,
-            body.chars().take(200).collect::<String>()
-        ));
+    if !response.status().is_success() {
+        let err_body = response.text().await.unwrap_or_default();
+        return Err(format!("Mistral API error: {}", err_body).into());
     }
 
-    let mistral_res: MistralResponse = res
+    let mistral_resp: MistralResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse API response: {}", e))?;
+        .map_err(|e| format!("JSON error: {}", e))?;
 
-    let content = mistral_res
+    let content = mistral_resp
         .choices
         .first()
         .map(|c| c.message.content.clone())
@@ -459,14 +495,14 @@ async fn call_mistral(api_key: &str, context: &str) -> Result<Diagnosis, String>
 
 #[tauri::command]
 pub async fn diagnose_issue(
+    app: tauri::AppHandle,
     trigger: DiagnosticTrigger,
     repo_path: Option<String>,
     secrets_state: State<'_, SecretsState>,
     pty_state: State<'_, MultiPtyState>,
     sys_state: State<'_, SysState>,
     diagnosis_state: State<'_, DiagnosisState>,
-    app: AppHandle,
-) -> Result<Diagnosis, String> {
+) -> AppResult<DiagnosisReport> {
     // Check API key — silently fail if not configured
     let api_key = secrets::get_secret_internal(&secrets_state, MISTRAL_API_KEY)
         .ok_or_else(|| "AI Copilot not configured — add MISTRAL_API_KEY in Secrets".to_string())?;
@@ -475,22 +511,22 @@ pub async fn diagnose_issue(
 
     // Return cached diagnosis if available
     {
-        let cache = diagnosis_state.cache.lock().unwrap();
+        let mut cache = diagnosis_state.cache.lock().map_err(AppError::from_lock_poison)?;
         if let Some(cached) = cache.get(&key) {
-            return Ok(cached.clone());
+            return Ok(cached);
         }
     }
 
     // Rate limit: 1 request per 10s per trigger type
     {
         let kind = trigger_kind(&trigger);
-        let mut last = diagnosis_state.last_request.lock().unwrap();
+        let mut last = diagnosis_state.last_request.lock().map_err(AppError::from_lock_poison)?;
         if let Some(prev) = last.get(&kind) {
             if prev.elapsed() < Duration::from_secs(RATE_LIMIT_SECS) {
-                return Err(format!(
+                return Err(AppError::Custom(format!(
                     "Rate limited — please wait {} seconds before retrying",
                     RATE_LIMIT_SECS - prev.elapsed().as_secs()
-                ));
+                )));
             }
         }
         last.insert(kind, Instant::now());
@@ -500,14 +536,14 @@ pub async fn diagnose_issue(
     let context_str = ctx.to_prompt();
 
     if context_str.trim().is_empty() {
-        return Err("No diagnostic context available".to_string());
+        return Err(AppError::Custom("No diagnostic context available".to_string()));
     }
 
-    let diagnosis = call_mistral(&api_key, &context_str).await?;
+    let diagnosis = call_mistral(&diagnosis_state.client, &api_key, &context_str).await?;
 
-    // Cache result
+    // Cache result with LRU deterministic bounded eviction (max 100 entries)
     {
-        let mut cache = diagnosis_state.cache.lock().unwrap();
+        let mut cache = diagnosis_state.cache.lock().map_err(AppError::from_lock_poison)?;
         cache.insert(key, diagnosis.clone());
     }
 
@@ -545,7 +581,7 @@ mod tests {
         // Recent Git Commit Diff section — capped to 8 000 chars (mirrors gather_context)
         if let Some(diff) = git_diff {
             let diff_preview = if diff.len() > 8_000 {
-                format!("{}...(truncated)", &diff[..8_000])
+                format!("{}...(truncated)", truncate_to_char_boundary(diff, 8_000))
             } else {
                 diff.to_string()
             };
@@ -555,7 +591,7 @@ mod tests {
         // HTTP response body section — capped to 2 000 chars (mirrors gather_context)
         if let Some(body) = response_body {
             let body_preview = if body.len() > 2_000 {
-                format!("{}...(truncated)", &body[..2_000])
+                format!("{}...(truncated)", truncate_to_char_boundary(body, 2_000))
             } else {
                 body.to_string()
             };
@@ -853,5 +889,17 @@ mod tests {
                 id_b,
             );
         }
+    }
+
+    #[test]
+    fn test_ollama_request_serialization() {
+        let req = OllamaRequest {
+            model: "llama3.2".to_string(),
+            prompt: "hello world".to_string(),
+            stream: true,
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("llama3.2"));
+        assert!(json.contains("hello world"));
     }
 }

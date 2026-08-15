@@ -1,58 +1,66 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
-import { CheckCircle2, XCircle, ChevronRight, Download, Box, GitBranch, Search, Zap, Code2 } from 'lucide-react';
+import { CheckCircle2, XCircle, ChevronRight, Download, Box, GitBranch, Search, Zap, Code2, type LucideIcon } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useStore } from '../store/store';
 
 interface ToolStatus {
   name: string;
   command: string;
-  icon: any;
+  icon: LucideIcon;
   version: string | null;
   loading: boolean;
   installUrl: string;
 }
 
+const INITIAL_TOOLS: Omit<ToolStatus, 'version' | 'loading'>[] = [
+  { name: 'Git', command: 'git', icon: GitBranch, installUrl: 'https://git-scm.com/downloads' },
+  { name: 'Docker', command: 'docker', icon: Box, installUrl: 'https://docs.docker.com/get-docker/' },
+  { name: 'Ripgrep', command: 'rg', icon: Search, installUrl: 'https://github.com/BurntSushi/ripgrep' },
+  { name: 'Node.js', command: 'node', icon: Code2, installUrl: 'https://nodejs.org/' },
+];
+
 export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => {
   const [step, setStep] = useState(1);
-  const [tools, setTools] = useState<ToolStatus[]>([
-    { name: 'Git', command: 'git', icon: GitBranch, version: null, loading: true, installUrl: 'https://git-scm.com/downloads' },
-    { name: 'Docker', command: 'docker', icon: Box, version: null, loading: true, installUrl: 'https://docs.docker.com/get-docker/' },
-    { name: 'Ripgrep', command: 'rg', icon: Search, version: null, loading: true, installUrl: 'https://github.com/BurntSushi/ripgrep' },
-    { name: 'Node.js', command: 'node', icon: Code2, version: null, loading: true, installUrl: 'https://nodejs.org/' },
-  ]);
+  const [tools, setTools] = useState<ToolStatus[]>(() =>
+    INITIAL_TOOLS.map((t) => ({ ...t, version: null, loading: true }))
+  );
   const [ollamaVersion, setOllamaVersion] = useState<string | null>(null);
   const [ollamaLoading, setOllamaLoading] = useState(true);
 
-  const updateSettings = useStore(s => s.updateSettings);
-  const defaultPath = useStore(s => s.settings.defaultPath);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const defaultPath = useStore((s) => s.settings.defaultPath);
 
   useEffect(() => {
     if (step === 3) {
-      // Detect CLI tools
-      Promise.all(tools.map(async (tool, i) => {
+      // Detect CLI tools using static configuration
+      INITIAL_TOOLS.forEach(async (tool, i) => {
         try {
           const version = await invoke<string>('detect_tool', { tool: tool.command });
-          setTools(prev => {
+          setTools((prev) => {
             const next = [...prev];
-            next[i].version = version || null;
-            next[i].loading = false;
+            if (next[i]) {
+              next[i] = { ...next[i], version: version || null, loading: false };
+            }
             return next;
           });
         } catch {
-          setTools(prev => {
+          setTools((prev) => {
             const next = [...prev];
-            next[i].loading = false;
+            if (next[i]) {
+              next[i] = { ...next[i], loading: false };
+            }
             return next;
           });
         }
-      }));
+      });
 
-      // Detect Ollama (running locally)
-      fetch('http://127.0.0.1:11434/')
-        .then(res => {
-          if (res.ok) setOllamaVersion('Running');
+      // Probe Ollama via the Rust backend to avoid CSP restrictions in
+      // production Tauri builds that block direct WebView → localhost fetches.
+      invoke<boolean>('is_ollama_running')
+        .then((running) => {
+          setOllamaVersion(running ? 'Running' : null);
           setOllamaLoading(false);
         })
         .catch(() => {
@@ -60,7 +68,6 @@ export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => 
           setOllamaLoading(false);
         });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   const handlePickDirectory = async () => {
@@ -87,13 +94,12 @@ export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => 
           
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex flex-col items-center justify-center text-center">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 mb-8">
-                <span className="font-black text-white text-4xl">V</span>
-              </div>
+              <img src="/logo.png" alt="CodexOS Logo" className="w-20 h-20 rounded-2xl object-contain shadow-xl shadow-indigo-500/20 mb-8 border border-white/10" />
               <h1 className="text-4xl font-black mb-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-gray-400">Welcome to CodexOS v2</h1>
               <p className="text-gray-400 text-lg mb-12">The Ultimate Developer Toolkit.<br/>Let's set up your workspace in 60 seconds.</p>
               <button 
                 onClick={() => setStep(2)}
+                aria-label="Get Started"
                 className="bg-white text-black px-8 py-3 rounded-xl font-bold hover:bg-gray-200 transition-colors flex items-center gap-2"
               >
                 Get Started <ChevronRight size={20} />
@@ -109,6 +115,7 @@ export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => 
               <div className="bg-white/5 border border-white/10 rounded-xl p-6 flex flex-col items-center gap-4 mb-8">
                 <button 
                   onClick={handlePickDirectory}
+                  aria-label="Choose Folder"
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-medium transition-colors"
                 >
                   Choose Folder
@@ -121,9 +128,14 @@ export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => 
               </div>
 
               <div className="mt-auto flex justify-between items-center pt-8">
-                <button onClick={() => setStep(3)} className="text-gray-500 hover:text-white transition-colors">Skip</button>
+                <button
+                  onClick={() => setStep(3)}
+                  aria-label="Skip"
+                  className="text-gray-500 hover:text-white transition-colors"
+                >Skip</button>
                 <button 
                   onClick={() => setStep(3)}
+                  aria-label="Continue"
                   className="bg-white text-black px-6 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors flex items-center gap-2"
                 >
                   Continue <ChevronRight size={18} />
@@ -148,13 +160,13 @@ export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => 
                       ) : t.version ? (
                         <div className="text-xs text-green-400 font-mono truncate" title={t.version}>{t.version}</div>
                       ) : (
-                        <a href={t.installUrl} target="_blank" rel="noreferrer" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 mt-0.5">
+                        <a href={t.installUrl} target="_blank" rel="noreferrer" aria-label={`Install ${t.name}`} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 mt-0.5">
                           Not found <Download size={10} />
                         </a>
                       )}
                     </div>
                     <div>
-                      {t.loading ? null : t.version ? <CheckCircle2 size={18} className="text-green-500" /> : <XCircle size={18} className="text-red-500" />}
+                      {t.loading ? null : t.version ? <CheckCircle2 size={18} className="text-green-500" aria-label={`${t.name} detected`} /> : <XCircle size={18} className="text-red-500" aria-label={`${t.name} not found`} />}
                     </div>
                   </div>
                 ))}
@@ -168,21 +180,26 @@ export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => 
                     ) : ollamaVersion ? (
                       <div className="text-xs text-green-400 font-mono">Ready</div>
                     ) : (
-                      <a href="https://ollama.com" target="_blank" rel="noreferrer" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 mt-0.5">
+                      <a href="https://ollama.com" target="_blank" rel="noreferrer" aria-label="Install Ollama for local AI" className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 mt-0.5">
                         Not running <Download size={10} />
                       </a>
                     )}
                   </div>
                   <div>
-                    {ollamaLoading ? null : ollamaVersion ? <CheckCircle2 size={18} className="text-green-500" /> : <XCircle size={18} className="text-red-500" />}
+                    {ollamaLoading ? null : ollamaVersion ? <CheckCircle2 size={18} className="text-green-500" aria-label="Ollama is running" /> : <XCircle size={18} className="text-red-500" aria-label="Ollama not running" />}
                   </div>
                 </div>
               </div>
 
               <div className="mt-8 flex justify-between items-center">
-                <button onClick={() => setStep(4)} className="text-gray-500 hover:text-white transition-colors">Skip</button>
+                <button
+                  onClick={() => setStep(4)}
+                  aria-label="Skip"
+                  className="text-gray-500 hover:text-white transition-colors"
+                >Skip</button>
                 <button 
                   onClick={() => setStep(4)}
+                  aria-label="Almost done"
                   className="bg-white text-black px-6 py-2 rounded-xl font-bold hover:bg-gray-200 transition-colors flex items-center gap-2"
                 >
                   Almost done <ChevronRight size={18} />
@@ -201,6 +218,7 @@ export const OnboardingWizard = ({ onComplete }: { onComplete: () => void }) => 
               
               <button 
                 onClick={onComplete}
+                aria-label="Open CodexOS"
                 className="bg-indigo-600 text-white px-12 py-4 rounded-xl font-bold text-lg hover:bg-indigo-500 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-indigo-500/25"
               >
                 Open CodexOS

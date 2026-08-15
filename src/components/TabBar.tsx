@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useStore } from '../store/store';
+import { useStore, type AppTab } from '../store/store';
 import { X, Plus } from 'lucide-react';
-import { SIDEBAR_ITEMS } from '../App';
+import { SIDEBAR_ITEMS } from './layout/Sidebar';
 
 export const TabBar = () => {
   const tabs = useStore(s => s.tabs);
@@ -13,8 +13,12 @@ export const TabBar = () => {
   
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null);
   
-  const getTabLabel = (app: string) => {
-    return SIDEBAR_ITEMS.find(i => i.id === app)?.label || app;
+  const getTabLabel = (tab: AppTab) => {
+    if (tab.currentPath && tab.activeApp !== 'home' && tab.activeApp !== 'settings') {
+      const segments = tab.currentPath.split(/[/\\]/);
+      return segments.pop() || segments.pop() || tab.currentPath;
+    }
+    return SIDEBAR_ITEMS.find((i) => i.id === tab.activeApp)?.label || tab.activeApp;
   };
   
   return (
@@ -42,12 +46,12 @@ export const TabBar = () => {
               : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
             }`}
         >
-          <span>{getTabLabel(tab.activeApp)}</span>
+          <span>{getTabLabel(tab)}</span>
           {tabs.length > 1 && (
             <X
               size={12}
               role="button"
-              aria-label={`Close ${getTabLabel(tab.activeApp)} tab`}
+              aria-label={`Close ${getTabLabel(tab)} tab`}
               tabIndex={0}
               className="opacity-0 group-hover:opacity-100 hover:text-red-400 p-0.5 rounded-full hover:bg-white/10 transition-all"
               onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}

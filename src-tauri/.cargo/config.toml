@@ -1,0 +1,7 @@
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
+rustflags = [
+  "-L", "native=C:\\PROGRA~2\\WINDOW~1\\10\\Lib\\10.0.26100.0\\um\\x64",
+  "-L", "native=C:\\PROGRA~2\\WINDOW~1\\10\\Lib\\10.0.26100.0\\ucrt\\x64",
+  "-L", "native=C:\\PROGRA~1\\MICROS~2\\2022\\Community\\VC\\Tools\\MSVC\\14.40.33807\\lib\\x64"
+]

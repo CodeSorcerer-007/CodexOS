@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useStore } from '../store/store';
 import { useDiagnosisStore, type Diagnosis } from '../store/diagnosisStore';
@@ -20,10 +20,8 @@ export const MemoryProfiler = () => {
 
   // Use settings store values when available (task 7 will add these fields);
   // fall back to design-doc defaults until then.
-  const memorySpikeThresholdMb: number =
-    (useStore((s) => (s.settings as Record<string, unknown>).memorySpikeThresholdMb) as number | undefined) ?? 500;
-  const memorySpikeWindowSec: number =
-    (useStore((s) => (s.settings as Record<string, unknown>).memorySpikeWindowSec) as number | undefined) ?? 10;
+  const memorySpikeThresholdMb: number = useStore((s) => s.settings.memorySpikeThresholdMb) ?? 500;
+  const memorySpikeWindowSec: number = useStore((s) => s.settings.memorySpikeWindowSec) ?? 10;
 
   useEffect(() => {
     const fetchMem = async () => {
