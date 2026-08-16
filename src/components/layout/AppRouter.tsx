@@ -28,9 +28,11 @@ const CollaborativeEditor = lazy(() => import('../CollaborativeEditor').then(m =
 const SecretsManager = lazy(() => import('../SecretsManager').then(m => ({ default: m.SecretsManager })));
 const PortTunnel = lazy(() => import('../PortTunnel').then(m => ({ default: m.PortTunnel })));
 const SettingsPage = lazy(() => import('../SettingsPage').then(m => ({ default: m.SettingsPage })));
+const GridlineDashboard = lazy(() => import('../../gridline-dashboard/demo'));
 
 const ROUTE_REGISTRY: Partial<Record<AppId, React.ComponentType<any>>> = {
   home: CodexOSDashboard,
+  gridline: GridlineDashboard,
   files: FileGrid,
   editor: LocalCodeEditor,
   docker: DockerDashboard,

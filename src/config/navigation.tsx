@@ -25,6 +25,7 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
   { id: 'editor',     icon: <FileCode2 size={18} />,       label: 'Code Editor',   group: 'core' },
   { id: 'terminal',   icon: <TerminalSquare size={18} />,  label: 'Terminal',      group: 'core' },
   { id: 'git',        icon: <GitBranch size={18} />,       label: 'Git Client',    group: 'core' },
+  { id: 'gridline',   icon: <LayoutDashboard size={18} />, label: 'Gridline UI',   group: 'core' },
   { id: 'process',    icon: <Activity size={18} />,        label: 'Processes',     group: 'system' },
   { id: 'env',        icon: <FileText size={18} />,        label: 'Env Manager',   group: 'system' },
   { id: 'ssh',        icon: <Server size={18} />,          label: 'SSH Remote',    group: 'system' },

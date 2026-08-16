@@ -78,8 +78,9 @@ src-tauri/capabilities/ Tauri 2.0 IPC capability grants
 2. **One concern per PR** — keep changes focused and reviewable.
 3. **Write tests** for new Rust commands and non-trivial React components.
 4. **Keep commits atomic** — each commit should build and pass tests on its own.
-5. **Update the README** if you add a new module or change the architecture.
-6. **No secrets in commits** — use the Secrets Vault for any API keys.
+5. **Log Your Commits** — Add your commit entry to [COMMIT_LOG.md](./COMMIT_LOG.md) to record your contribution and credit.
+6. **Update Documentation** if you add a new module, alter UI behaviors, or change the architecture.
+7. **No secrets in commits** — use the Secrets Vault for any API keys.
 
 ---
 

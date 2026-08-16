@@ -3,146 +3,99 @@
   
   # CodexOS
 
-  **The Ultimate Offline Developer OS.**  
-  A blazingly fast, deeply integrated system explorer and control center built on Rust, Tauri 2.0, and React 19.
+  **The Ultimate Offline Developer OS & Native Control Center**  
+  A blazingly fast, deeply integrated system explorer built on Rust, Tauri 2.0, and React 19.
 
+  [![Release](https://img.shields.io/badge/version-2.1.0-blue?style=for-the-badge)](https://github.com/CodeSorcerer-007/CodexOS/releases)
   [![Built with Tauri](https://img.shields.io/badge/Built_with-Tauri_2.0-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](#)
   [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](#)
-  [![Rust](https://img.shields.io/badge/Rust-1.77.2+-000000?style=for-the-badge&logo=rust&logoColor=white)](#)
+  [![Rust](https://img.shields.io/badge/Rust-1.77+-000000?style=for-the-badge&logo=rust&logoColor=white)](#)
   [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](#)
   [![Mistral AI](https://img.shields.io/badge/Mistral-AI_Copilot-FF7000?style=for-the-badge&logo=openai&logoColor=white)](#)
   [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#)
-  [![CI](https://github.com/CodeSorcerer-007/CodexOS/actions/workflows/ci.yml/badge.svg)](#)
-  [![Clippy](https://img.shields.io/badge/clippy-passing-green?logo=rust)](#)
-  [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#)
 </div>
 
 <br/>
 
-CodexOS is a next-generation developer environment and control center designed from the ground up for speed, power, and offline capabilities. Bypassing Electron's bloat in favor of **Tauri 2.0 (Rust)**, CodexOS brings deep native OS integration directly into a gorgeous, ultra-premium glassmorphic React interface.
+**CodexOS** is a next-generation desktop developer environment and system control center engineered from the ground up for speed, local privacy, and deep native OS capabilities. Bypassing Electron's memory bloat in favor of **Tauri 2.0 (Rust)**, CodexOS combines native system performance with a glassmorphic React 19 interface.
 
 > [!NOTE]
-> **Cross-Platform Ready:** This application is built for everyone and runs natively on Windows, macOS, and Linux without complex configuration.
+> **100% Offline-First & Cross-Platform:** CodexOS runs entirely locally on Windows, macOS, and Linux. No forced cloud accounts, no telemetry, and zero mandatory network calls.
+
+---
+
+## 📑 Table of Contents
+
+- [🚀 Feature Arsenal](#-feature-arsenal)
+- [✨ AI Root-Cause Copilot](#-ai-root-cause-copilot)
+- [🛠️ Tech Stack](#️-tech-stack)
+- [🏗️ System Architecture](#️-system-architecture)
+- [⚡ Quick Installation](#-quick-installation)
+- [⚙️ Building from Source](#️-building-from-source)
+- [📜 Creator Commit Log & Contributing](#-creator-commit-log--contributing)
+- [📁 Project Structure](#-project-structure)
+- [🔒 Security & Privacy Guarantees](#-security--privacy-guarantees)
+- [📄 License](#-license)
 
 ---
 
 ## 🚀 Feature Arsenal
 
-CodexOS is packed with high-performance native modules executing completely offline on your machine:
+CodexOS is packed with high-performance native modules running locally on your hardware:
 
+### 🗂️ Core File & System Management
 | Module | Description |
 |---|---|
-| 🗂️ **File Vault** | Native file explorer with git status overlay, bulk rename, duplicate finder, and treemap disk visualizer |
-| 🔀 **Visual Git Client** | Full offline Git — branching, merging, stash, diff viewer, clone, fetch, and history |
-| 💻 **Terminal Multiplexer** | Run multiple parallel shell sessions natively via Rust PTY bridge |
-| 🔑 **Secrets Manager** | Encrypted in-memory secrets vault with run-with-secrets injection |
-| 🛡️ **ZKP Vault** | Zero-Knowledge Proof based HMAC encryption for paranoid secret storage |
-| 🌐 **Proxy Interceptor** | Sniff, capture, and replay raw local HTTP/TCP traffic |
-| 🐳 **Docker Dashboard** | Monitor containers, images, networks, and stream logs in real-time |
-| 🗄️ **Database Studio** | Local SQLite management with query analysis and results grid |
-| ⚡ **Local AI** | Query local Ollama LLMs offline — no API keys, no cloud |
-| 🖥️ **GPU Cluster** | Real-time GPU hardware metrics and utilization monitoring |
-| 🔭 **AST Refactor Engine** | Tree-sitter powered semantic code analysis and manipulation |
-| 🤝 **CRDT Collab Editor** | Conflict-free peer-to-peer code editing via y-webrtc + y-monaco |
-| 🚇 **Port Tunnel** | Secure local port forwarding and reverse proxies via serveo |
-| 🧠 **Memory Profiler** | Real-time process memory analysis and top-consumer tracking |
-| 📦 **Sandbox / Nano-VMs** | Run WASM/WASI plugins in sandboxed Wasmtime nano-VMs |
-| 🔌 **Plugin Manager** | Load and run local WASM plugins from disk |
-| 🛒 **Plugin Marketplace** | Browse and install community plugins |
-| 🤖 **Automation Studio** | Visual workflow automation builder |
-| 📚 **DevDocs Viewer** | Browse offline developer documentation |
-| ✨ **AI Root-Cause Copilot** | Auto-diagnose terminal errors, memory spikes & HTTP failures via Mistral AI |
+| 🗂️ **File Vault** | High-performance file explorer with Microsoft Fluent UI icons, quick access pinning, git status overlays, bulk regex renamer, duplicate finder, and disk treemap visualizer. |
+| 🔀 **Visual Git Client** | Full offline Git client featuring interactive branch graphs, staging, commit history, diff viewer, stash manager, clone, and remote sync. |
+| 💻 **Terminal Multiplexer** | Concurrent multi-tab shell sessions powered by native Rust PTY bridges (`powershell.exe` on Windows, `/bin/bash` / `zsh` on Unix). |
+| 📊 **Gridline UI & Modern Layout** | High-density card dashboard for immediate system telemetry, favorite directories, recent projects, and quick action execution. |
+| ⚙️ **Process Manager** | Real-time system process monitor with CPU/RAM utilization telemetry, sorting, and safe process termination. |
+| 📄 **Env Manager** | Workspace environment variable editor with `.env` syntax parsing, inline key encryption, and unencrypted export safety warnings. |
+| 📡 **SSH Remote** | Secure remote server file explorer and terminal manager built on native `ssh2` bindings with host key verification. |
+
+### 🔐 Security & Networking
+| Module | Description |
+|---|---|
+| 🔑 **Secrets Manager** | Encrypted in-memory secrets vault powered by ChaCha20-Poly1305 with run-with-secrets command injection. |
+| 🛡️ **HMAC / ZKP Vault** | Cryptographically signed key-value vault using HMAC-SHA256 zero-knowledge proof verification. |
+| 🌐 **Proxy Interceptor** | Local HTTP/TCP traffic sniffer, debugger, and request replay engine built on hyper. |
+| 🚇 **Port Tunnel** | Secure local port forwarding and reverse proxy tunneling powered by serveo. |
+
+### 🛠️ Developer Tooling & Diagnostics
+| Module | Description |
+|---|---|
+| 🐳 **Docker Dashboard** | Local Docker container, image, and network manager with real-time log tailing and container lifecycle controls. |
+| 🗄️ **Database Studio** | SQLite visual manager with schema inspection, query execution, and tabular results analyzer. |
+| ⚡ **Local AI Copilot** | Offline LLM assistant connecting directly to local Ollama instances — zero API keys and zero telemetry. |
+| ✨ **AI Root-Cause Copilot** | Autonomous error diagnosis system diagnosing terminal errors, memory spikes, and HTTP failures via Mistral AI. |
+| 🖥️ **GPU Cluster** | Real-time GPU utilization, VRAM metrics, and hardware telemetry tracking. |
+| 🧠 **Memory Profiler** | Live process memory delta tracking and resource leak detection. |
+| 🔭 **AST Refactor Engine** | Semantic code refactoring and syntax tree explorer powered by WebAssembly Tree-sitter. |
+| 🤝 **CRDT Collab Editor** | Conflict-free peer-to-peer real-time code editor built on Yjs, WebRTC, and Monaco Editor. |
+| 📦 **WASM Sandbox (Nano-VMs)** | Sandboxed WASM/WASI plugin execution engine powered by Wasmtime. |
+| 🔌 **Plugin Manager & Marketplace** | Modular plugin runner and community plugin discovery hub. |
+| 🤖 **Automation Studio** | Visual node-based workflow builder (ReactFlow) for automating routine developer tasks. |
+| 📚 **DevDocs Viewer** | Instant offline documentation browser for languages, frameworks, and APIs. |
 
 ---
 
 ## ✨ AI Root-Cause Copilot
 
 > [!IMPORTANT]
-> **New Feature** — The AI Root-Cause Copilot automatically diagnoses errors across your entire dev environment using **Mistral AI** (`mistral-large-latest`). It's fully opt-in and completely silent without an API key.
-
-### How It Works
-
-When something goes wrong in CodexOS, the Copilot springs into action:
+> **Autonomous Diagnosis** — The AI Root-Cause Copilot diagnoses issues across your entire dev environment using **Mistral AI** (`mistral-large-latest`). It is completely opt-in, silent without an API key, and stores keys exclusively inside Rust's encrypted vault.
 
 ```
-PTY exit ≠ 0      ──┐
-Memory spike       ──┼──► Context gathered ──► Mistral API ──► Diagnosis Card
-HTTP 4xx / 5xx    ──┘
+Terminal Exit ≠ 0 ──┐
+Memory Spike Delta  ──┼──► Rust Context Gatherer ──► Mistral API ──► Dismissible Diagnosis Card
+HTTP 4xx / 5xx Error──┘
 ```
 
-It collects relevant context (terminal output, git diff, system stats, HTTP request/response), sends it to Mistral, and renders a **dismissible glassmorphic diagnosis card** — not a chat window — right inside the active module.
-
-### Trigger Sources
-
-| Trigger | How It Fires |
-|---|---|
-| **Terminal Error** | Automatically when a shell command exits with a non-zero code |
-| **Memory Spike** | Automatically when a process memory delta exceeds the configured threshold |
-| **Network Error** | Manually via a **"Diagnose"** button on any 4xx / 5xx request row in the Proxy Interceptor |
-
-### Diagnosis Card
-
-Each card shows:
-- 🔴 **Root Cause** — concise headline of what failed
-- 🏷️ **Confidence Badge** — `high` (red) · `medium` (amber) · `low` (gray)
-- 📖 **Collapsible Explanation** — detailed analysis
-- 💊 **Suggested Fix** — monospace code block with the exact fix
-- 📁 **Related Files** — clickable file chips that navigate directly to the affected file
-
-The card animates in with Framer Motion and can be dismissed permanently for that session.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       RUST BACKEND (ai.rs)                   │
-│                                                              │
-│  ┌─────────────┐   ┌──────────────┐   ┌──────────────────┐  │
-│  │  Context    │   │  Rate Limiter │   │   In-Memory      │  │
-│  │  Gatherer   │──►│  1 req/10s   │──►│   Cache          │  │
-│  │             │   │  per trigger │   │   (by trigger)   │  │
-│  └─────────────┘   └──────────────┘   └────────┬─────────┘  │
-│       ▲                                         │ miss       │
-│       │                                         ▼            │
-│  Terminal lines                     Mistral API (15s timeout)│
-│  Git diff (≤8K)                     mistral-large-latest     │
-│  Sys stats                          JSON parser +            │
-│  HTTP req/res                       fence stripping          │
-└─────────────────────────────────────────────────────────────┘
-                          │ Result<Diagnosis>
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   FRONTEND (React + Zustand)                  │
-│                                                              │
-│  diagnosisStore → DiagnosisCard (glassmorphic overlay)       │
-│    loading  → skeleton shimmer (animate-pulse)               │
-│    success  → cause + badge + explanation + fix + files      │
-│    error    → message + retry button                         │
-│    dismissed → null (session-persistent, no localStorage)    │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Security
-
-- 🔐 `MISTRAL_API_KEY` is stored **exclusively** in the ChaCha20-Poly1305 encrypted Secrets Vault — never in JavaScript, never in logs, never in Tauri events
-- 🔒 `get_secret_internal` is a Rust-only function, unreachable from the frontend
-- ✂️ Git diffs are capped at **8,000 chars** to prevent accidental transmission of credential files
-- 🚫 No data leaves your machine except the diagnostic context sent to Mistral
-
-### Setup
-
-1. **Unlock** the Secrets Vault in CodexOS
-2. **Add a secret**: Key = `MISTRAL_API_KEY` · Value = your [Mistral API key](https://console.mistral.ai)
-3. Go to **Settings → AI Root-Cause Copilot** — you'll see ✅ **"API Key Configured"**
-4. Run a failing command in the terminal — the diagnosis card appears automatically!
-
-### Configuration (Settings Page)
-
-| Setting | Default | Description |
-|---|---|---|
-| Enable / Disable | `on` | Master toggle — disabling stops all AI calls completely |
-| Memory Spike Threshold | `500 MB` | Delta required to trigger a memory diagnosis |
-| Memory Spike Window | `10 sec` | Rolling window for spike detection |
+### Key Capabilities
+- 🔴 **Automatic Detection**: Captures terminal stdout/stderr, git diffs (≤8KB), system metrics, or HTTP traces.
+- 🏷️ **Confidence Metrics**: High / Medium / Low confidence ratings with transparent explanations.
+- 💊 **Actionable Fixes**: Exact shell commands and code snippets formatted for immediate copy or review.
+- 📁 **File Navigation**: Interactive file badges linking straight to the problematic source line.
 
 ---
 
@@ -151,119 +104,117 @@ The card animates in with Framer Motion and can be dismissed permanently for tha
 ### Frontend
 | Technology | Version | Purpose |
 |---|---|---|
-| React | 19 | UI Framework |
-| Vite | 8 | Build tool & dev server |
-| TypeScript | 6.0 | Type safety |
-| Zustand | 5 | Global state management |
-| Framer Motion | 12 | Animations & transitions |
-| Tailwind CSS | 4 | Utility-first styling |
-| Lucide React | 1.28 | Icon library |
-| Monaco Editor | 0.56 | Code editor |
-| ReactFlow | 11 | Automation workflow graph |
-| Recharts | 3 | Data visualization |
-| Yjs + y-webrtc | 13 / 10 | CRDT real-time collaboration |
-| xterm.js | 5 | Terminal emulation |
+| **React** | 19 | Declarative UI framework |
+| **Vite** | 8 | Blazing fast build tooling & HMR |
+| **TypeScript** | 6.0 | Strict type safety across the entire application |
+| **Zustand** | 5 | Modular domain slices state management |
+| **Framer Motion** | 12 | Fluid animations and glassmorphic modal transitions |
+| **Tailwind CSS** | 4 | Modern utility-first styling |
+| **Monaco Editor** | 0.56 | High-performance code editor |
+| **Fluent UI Icons** | 2.0 | Standardized file & directory system iconography |
+| **ReactFlow** | 12 | Interactive node-based automation graphs |
+| **Recharts** | 3 | Real-time hardware telemetry and treemap visualization |
+| **Yjs + WebRTC** | 13 / 10 | Real-time CRDT peer-to-peer collaboration |
+| **xterm.js** | 6 | Full terminal emulation with ANSI color support |
 
-### Backend (Rust / Tauri)
+### Backend (Rust / Tauri 2.0)
 | Crate | Purpose |
 |---|---|
-| Tauri 2.0 | Native app shell & IPC bridge |
-| portable-pty | Native PTY terminal sessions |
-| git2 | Libgit2 bindings for Git operations |
-| rusqlite | SQLite database access |
-| sysinfo | CPU / memory / process monitoring |
-| wasmtime | WASM/WASI sandboxed plugin runner |
-| ring | Cryptography (HMAC, hashing) |
-| tokio | Async runtime |
-| hyper | HTTP proxy engine |
-| reqwest | Async HTTP client (Mistral API) |
-| serde / serde_json | Serialization |
-| ssh2 | SSH file browsing |
-| proptest | Property-based testing for AI module |
+| **Tauri 2.0** | Secure native application shell & capability-based IPC bridge |
+| **portable-pty** | Cross-platform native PTY session manager |
+| **git2** | Native libgit2 bindings for high-speed offline git operations |
+| **rusqlite** | SQLite persistence for database studio & local KV storage |
+| **sysinfo** | Real-time CPU, RAM, disk, and process telemetry |
+| **wasmtime** | Sandboxed WASM / WASI plugin execution engine |
+| **ring / chacha20poly1305** | Authenticated encryption and HMAC proof cryptography |
+| **hyper / tokio** | Async HTTP proxy interceptor and network stream listener |
+| **reqwest** | Async HTTP client for AI Copilot diagnostics |
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
-- **Multi-Tab UI**: Up to 8 concurrent workspace tabs with per-tab state (`Ctrl+1..8` global hotkeys).
-- **Lazy-Loaded Modules**: Every major feature module is loaded on-demand via `React.lazy` + `Suspense`, keeping startup instant.
-- **Fault-Tolerant UI**: Global React Error Boundaries ensure individual plugin crashes never take down the dashboard.
-- **Global Store**: Prop-drilling-free state management powered by Zustand with persistent settings via `localStorage`.
-- **Native IPC Bridge**: All heavy lifting (file ops, git, crypto, docker, PTY) runs in Rust via Tauri's type-safe `invoke` IPC.
-- **AI Copilot**: Fully async Rust backend — the Tauri main thread is never blocked during Mistral API calls.
+- **Multi-Tab Workspace**: Run up to 8 concurrent workspace tabs (`Ctrl+1..8`) with isolated state and persistence.
+- **Lazy-Loaded Modules**: Every tool is dynamically imported via `React.lazy` + `Suspense`, maintaining sub-100ms startup.
+- **Resilient UI Boundaries**: Global React Error Boundaries isolate crashes so individual modules never take down the app.
+- **Typed Rust IPC**: All filesystem, git, networking, and crypto operations execute in Rust with type-safe Tauri 2 `invoke` handlers.
+
+---
 
 ## ⚡ Quick Installation
 
-No coding or dev tools required! Pick your preferred installation method below:
+Pre-built binaries are available for all major platforms:
 
-### Option 1: Direct Download (Recommended)
-Download the latest pre-compiled installers for your OS directly from GitHub Releases:
-- 🪟 **[Windows Installer (.msi / .exe)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
-- 🍏 **[macOS Installer (.dmg / .app)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
-- 🐧 **[Linux AppImage (.AppImage / .deb)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
+### Option 1: Direct Download
+Download the latest pre-compiled installers from [GitHub Releases](https://github.com/CodeSorcerer-007/CodexOS/releases/latest):
+- 🪟 **[Windows (.msi / .exe)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
+- 🍏 **[macOS (.dmg / .app)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
+- 🐧 **[Linux (.AppImage / .deb)](https://github.com/CodeSorcerer-007/CodexOS/releases/latest)**
 
 ### Option 2: Windows Package Manager (`winget`)
-Open PowerShell or Command Prompt and run:
 ```powershell
 winget install CodeSorcerer.CodexOS
 ```
 
 ### Option 3: One-Click PowerShell Installer
-Run this command in Windows PowerShell to automatically fetch and install the latest release:
 ```powershell
 iwr -useb https://raw.githubusercontent.com/CodeSorcerer-007/CodexOS/main/install.ps1 | iex
 ```
 
 ---
 
-## ⚙️ Building from Source (For Developers)
+## ⚙️ Building from Source
 
 ### Prerequisites
-- [Rust](https://rustup.rs/) (latest stable)
-- [Node.js](https://nodejs.org/) 20+
-- Windows MSVC build tools (Visual Studio Build Tools 2022)
+- [Rust](https://rustup.rs/) (latest stable toolchain)
+- [Node.js](https://nodejs.org/) (version 20 or higher)
+- Windows MSVC Build Tools (Visual Studio Build Tools 2022) or standard Unix build essentials
 
-### Install & Run
-
+### Clone & Run
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/CodeSorcerer-007/CodexOS.git
 cd CodexOS
 
-# Install frontend dependencies
+# 2. Install dependencies
 npm install
 
-# Run the dev server (Frontend + Rust backend with hot-reloading)
+# 3. Launch Tauri dev server (Frontend + Rust backend with hot-reload)
 npm run tauri dev
 ```
 
-### Other Commands
-
+### Development & Quality Checks
 ```bash
-# Lint the frontend (oxlint)
+# Run lightning-fast linter (oxlint)
 npm run lint
 
-# Run frontend component tests (Vitest)
-npm run test
+# Run frontend test suite (Vitest)
+npm test
 
-# Run Rust backend unit tests (includes AI property-based tests)
+# Run TypeScript typecheck
+npx tsc --noEmit
+
+# Run Rust backend unit & integration tests
 cd src-tauri && cargo test
 
-# Run Rust static analysis
-cd src-tauri && cargo clippy
-
-# Build the production executable (installer)
+# Build production installer
 npm run tauri build
 ```
 
-### Local Development Services
+---
 
-To test the proxy interceptor or network features locally, you can use the provided Docker Compose stack:
+## 📜 Creator Commit Log & Contributing
 
-```bash
-docker-compose up -d
-```
-This spins up dummy services (like nginx) to generate local traffic and test the network interceptors safely.
+We love contributions! CodexOS features a dedicated **Creator & Contributor Commit Log** where creators can publicly log and document their commit messages, PRs, and feature implementations.
+
+- 📝 **[View & Add to the Commit Log (COMMIT_LOG.md)](./COMMIT_LOG.md)**
+- 🤝 **[Read Contribution Guidelines (CONTRIBUTING.md)](./CONTRIBUTING.md)**
+- 🏛️ **[Review System Architecture (ARCHITECTURE.md)](./ARCHITECTURE.md)**
+
+### How Creators Can Mention Their Commits:
+1. Submit your PR following [Conventional Commits](https://www.conventionalcommits.org/).
+2. Add your commit entry to the top of the table in [`COMMIT_LOG.md`](./COMMIT_LOG.md).
+3. Include your GitHub handle, module scope, commit hash/PR link, and a concise summary.
 
 ---
 
@@ -271,80 +222,73 @@ This spins up dummy services (like nginx) to generate local traffic and test the
 
 ```
 CodexOS/
-├── src/                          # React frontend
-│   ├── App.tsx                   # Root app, sidebar, routing
-│   ├── components/               # Feature modules (lazy-loaded)
-│   │   ├── FileGrid.tsx          # File explorer
-│   │   ├── VisualGit.tsx         # Git client
-│   │   ├── TerminalMultiplexer.tsx
-│   │   ├── DockerDashboard.tsx
-│   │   ├── DatabaseStudio.tsx
-│   │   ├── NetworkInterceptor.tsx
-│   │   ├── CollaborativeEditor.tsx
-│   │   ├── SecretsManager.tsx
-│   │   ├── ZKPVault.tsx
-│   │   ├── LocalAI.tsx
-│   │   ├── GPUCluster.tsx
-│   │   ├── ASTRefactor.tsx
-│   │   ├── PortTunnel.tsx
-│   │   ├── MemoryProfiler.tsx
-│   │   ├── DiagnosisCard.tsx     # ✨ AI Copilot diagnosis overlay
-│   │   ├── SettingsPage.tsx      # Includes AI Copilot config section
-│   │   └── ...
-│   ├── store/
-│   │   ├── store.ts              # Zustand global state
-│   │   └── diagnosisStore.ts     # ✨ AI Copilot state slice
-│   ├── utils/
-│   │   └── detectMemorySpike.ts  # ✨ Pure memory spike detection
-│   └── hooks/
-│       └── useKeyboardShortcuts.ts
-├── src-tauri/                    # Rust backend
+├── src/                          # React 19 Frontend
+│   ├── App.tsx                   # App shell, tab manager, shortcut listeners
+│   ├── components/               # Core feature modules (lazy-loaded)
+│   │   ├── FileGrid.tsx          # Native file vault with Fluent UI icons
+│   │   ├── VisualGit.tsx         # Offline visual Git client
+│   │   ├── TerminalMultiplexer.tsx # Multi-session PTY terminal
+│   │   ├── SecretsManager.tsx    # ChaCha20-Poly1305 encrypted vault
+│   │   ├── HMACVault.tsx         # HMAC-SHA256 proof vault
+│   │   ├── DockerDashboard.tsx   # Container & image manager
+│   │   ├── DatabaseStudio.tsx    # SQLite query studio
+│   │   ├── NetworkInterceptor.tsx# HTTP/TCP proxy debugger
+│   │   ├── CollaborativeEditor.tsx # Yjs + WebRTC peer editor
+│   │   ├── LocalAI.tsx           # Ollama local LLM interface
+│   │   ├── ASTRefactor.tsx       # Tree-sitter semantic refactoring
+│   │   ├── GPUCluster.tsx        # GPU utilization monitor
+│   │   ├── MemoryProfiler.tsx    # Process memory delta analyzer
+│   │   ├── ProcessManager.tsx    # System process monitor & manager
+│   │   ├── EnvManager.tsx        # .env workspace manager
+│   │   ├── SshManager.tsx        # Remote SSH file & session manager
+│   │   ├── PortTunnel.tsx        # Serveo port forwarding
+│   │   ├── DiagnosisCard.tsx     # AI Root-Cause Copilot overlay
+│   │   └── SettingsPage.tsx      # System & AI Copilot configurations
+│   ├── gridline-dashboard/       # Modern high-density dashboard UI
+│   ├── store/                    # Zustand modular state slices
+│   ├── hooks/                    # Reusable hooks (keyboard shortcuts, PTY)
+│   └── lib/                      # Shared frontend utilities
+├── src-tauri/                    # Rust 2.0 Backend
 │   ├── src/
-│   │   ├── lib.rs                # Entry point, PTY, command registration
-│   │   ├── files.rs              # File system operations
-│   │   ├── git.rs                # Git2 operations
-│   │   ├── docker.rs             # Docker API
-│   │   ├── proxy.rs              # HTTP proxy/interceptor
-│   │   ├── secrets.rs            # Secrets vault (ChaCha20-Poly1305)
-│   │   ├── vault.rs              # ZKP encryption
-│   │   ├── hmac_vault.rs         # HMAC-based ZKP vault
-│   │   ├── ports.rs              # Port management & log tailing
-│   │   ├── sys.rs                # System stats
+│   │   ├── lib.rs                # App entrypoint & Tauri command registry
+│   │   ├── files.rs              # High-speed filesystem operations
+│   │   ├── git.rs                # Libgit2 bindings
+│   │   ├── multiplexer.rs        # PTY session management
+│   │   ├── secrets.rs            # In-memory ChaCha20 encrypted vault
+│   │   ├── hmac_vault.rs         # HMAC commitment proof vault
+│   │   ├── proxy.rs              # Async HTTP/TCP proxy engine
+│   │   ├── kv.rs                 # Decoupled SQLite key-value persistence
+│   │   ├── ai.rs                 # AI Copilot + Ollama integration
+│   │   ├── sys.rs / system_tools.rs # System telemetry & process tools
+│   │   ├── docker.rs             # Docker engine socket bridge
+│   │   ├── db.rs                 # SQLite runner
+│   │   ├── ssh.rs                # SSH2 remote filesystem client
 │   │   ├── tunnel.rs             # SSH reverse tunneling
-│   │   ├── multiplexer.rs        # Multi-PTY sessions
-│   │   ├── db.rs                 # SQLite & docset queries
-│   │   ├── crypto_tools.rs       # Hash, SSL, format conversion
-│   │   ├── ssh.rs                # SSH file browsing
-│   │   ├── ai.rs                 # ✨ AI Copilot + Ollama LLM integration
-│   │   └── plugin.rs             # WASM/WASI plugin runner
+│   │   └── plugin.rs             # Wasmtime sandboxed runner
 │   └── Cargo.toml
-├── .kiro/
-│   └── specs/
-│       └── ai-root-cause-copilot/  # ✨ Full feature spec & design docs
-│           ├── requirements.md
-│           ├── design.md
-│           └── tasks.md
-├── index.html
-├── vite.config.ts
-├── postcss.config.js
+├── docs/                         # Extended API & IPC reference documentation
+├── COMMIT_LOG.md                 # 📜 Creator & contributor commit log
+├── CONTRIBUTING.md               # Contribution standards and guidelines
+├── ARCHITECTURE.md               # Deep architectural documentation
 └── package.json
 ```
 
 ---
 
-## 🔒 Security & Offline-First
+## 🔒 Security & Privacy Guarantees
 
-CodexOS is designed for the paranoid developer.
-
-- **100% Local**: No telemetry, no tracking, no cloud accounts required.
-- **Memory Safety**: Backed by Rust's strict borrow checker and compiler guarantees.
-- **Encrypted**: Keys are never stored in plaintext — utilizes `ring` cryptography and HMAC-based Zero-Knowledge Proofs for verification.
-- **Sandboxed Plugins**: WASM plugins run inside Wasmtime's sandboxed environment with no host access by default.
-- **AI Key Isolation**: The Mistral API key never touches JavaScript — it lives exclusively in the Rust process inside the encrypted vault.
+- 🛡️ **100% Local Execution**: Your data, files, credentials, and code never leave your machine.
+- 🔐 **Isolated AI Keys**: `MISTRAL_API_KEY` is stored exclusively in the ChaCha20-Poly1305 vault inside the Rust memory space and is never exposed to JavaScript.
+- 📦 **Sandboxed Extensions**: WASM plugins run strictly inside Wasmtime sandboxes with zero host permissions by default.
+- 🛡️ **Strict Content Security**: Hardened CSP prevents unauthorized remote scripts and untrusted network origins.
 
 ---
 
-<br/>
+## 📄 License
+
+CodexOS is open-source software licensed under the [MIT License](./LICENSE).
+
 <div align="center">
-  <i>Built for power users. Zero compromises.</i>
+  <br/>
+  <b>Built for developers who value speed, privacy, and control.</b>
 </div>
