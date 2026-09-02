@@ -216,6 +216,24 @@ export const CollaborativeEditor = ({ currentPath }: { currentPath: string | nul
         </div>
       </div>
 
+      {!roomPassword.trim() ? (
+        <div className="bg-amber-950/40 border border-amber-500/30 px-4 py-2.5 rounded-lg flex items-center justify-between text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <span>⚠️</span>
+            <span>
+              <strong>Unprotected Room:</strong> This room has no password. Anyone guessing this Room ID can view and edit your code. Add a password above to enable End-to-End Encryption (E2EE).
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-teal-950/40 border border-teal-500/30 px-4 py-2 rounded-lg flex items-center gap-2 text-xs text-teal-200">
+          <span>🔒</span>
+          <span>
+            <strong>End-to-End Encrypted:</strong> Room signaling and CRDT document sync are encrypted with your room password.
+          </span>
+        </div>
+      )}
+
       <div className="flex-1 bg-black rounded-xl border border-white/10 overflow-hidden flex flex-col relative">
         <div className="bg-white/5 border-b border-white/10 p-2 flex justify-between items-center text-xs font-mono text-gray-400">
           <span>{currentPath || 'Untitled'}</span>

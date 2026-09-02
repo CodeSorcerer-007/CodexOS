@@ -56,8 +56,14 @@ export const SecretsManager = () => {
   const importEnvFile = async () => {
     try {
       const path = await open({ filters: [{ name: 'Env', extensions: ['env', 'txt'] }] });
-      if (!path) return;
+      if (!path || typeof path !== 'string') return;
       
+      const lastSlash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+      if (lastSlash > 0) {
+        const parentDir = path.substring(0, lastSlash);
+        await invoke('add_allowed_path', { path: parentDir }).catch(() => {});
+      }
+
       const content = await invoke<string>('read_file_text', { path });
       const lines = content.split('\n').filter(l => l.includes('=') && !l.startsWith('#'));
       
@@ -88,7 +94,13 @@ export const SecretsManager = () => {
   const exportEnvFile = async () => {
     try {
       const path = await save({ defaultPath: '.env', filters: [{ name: 'Env', extensions: ['env'] }] });
-      if (!path) return;
+      if (!path || typeof path !== 'string') return;
+
+      const lastSlash = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+      if (lastSlash > 0) {
+        const parentDir = path.substring(0, lastSlash);
+        await invoke('add_allowed_path', { path: parentDir }).catch(() => {});
+      }
       
       await invoke('export_secrets_to_env', { outputPath: path });
       success('Secrets exported successfully');

@@ -142,19 +142,22 @@ export const SettingsPage = () => {
             </button>
           </div>
 
-          {/* API key status indicator */}
+          {/* API key / Ollama status indicator */}
           <div className="flex items-center justify-between">
-            <span className="block text-sm font-bold text-gray-400">Mistral API Key</span>
+            <div>
+              <span className="block text-sm font-bold text-gray-400">AI Privacy & Engine</span>
+              <p className="text-xs text-gray-500 mt-0.5">Automated secret scrubbing enabled. Uses Mistral Cloud or Local Ollama.</p>
+            </div>
             {copilotConfigured === null ? null : copilotConfigured ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30">
-                ✓ API Key Configured
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30">
+                ✓ Ready (Hybrid / Local)
               </span>
             ) : (
               <button
                 onClick={() => store.setActiveApp('secrets')}
                 className="text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors"
               >
-                Set up API Key →
+                Configure Mistral Key →
               </button>
             )}
           </div>

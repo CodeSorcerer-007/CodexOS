@@ -309,26 +309,31 @@ pub fn execute_command(
         return Err(AppError::Command("Command must not be empty".to_string()));
     }
 
-    let p = std::path::Path::new(&cwd);
-    if !cwd.is_empty() {
-        if !p.exists() {
-            return Err(AppError::Command(format!(
-                "Working directory '{}' does not exist.",
-                cwd
-            )));
-        }
-        if !allowed_paths.is_allowed(p) {
-            return Err(AppError::Command(format!(
-                "Access denied: Working directory '{}' is outside allowed workspace boundaries.",
-                cwd
-            )));
-        }
+    let trimmed_cwd = cwd.trim();
+    if trimmed_cwd.is_empty() {
+        return Err(AppError::Command(
+            "Access denied: Working directory must be specified and within allowed workspace boundaries.".to_string(),
+        ));
+    }
+
+    let p = std::path::Path::new(trimmed_cwd);
+    if !p.exists() || !p.is_dir() {
+        return Err(AppError::Command(format!(
+            "Working directory '{}' does not exist or is not a directory.",
+            cwd
+        )));
+    }
+    if !allowed_paths.is_allowed(p) {
+        return Err(AppError::Command(format!(
+            "Access denied: Working directory '{}' is outside allowed workspace boundaries.",
+            cwd
+        )));
     }
 
     let res = if cfg!(target_os = "windows") {
-        run_cli("cmd", &["/c", &command], if cwd.is_empty() { None } else { Some(p) })?
+        run_cli("cmd", &["/c", &command], Some(p))?
     } else {
-        run_cli("sh", &["-c", &command], if cwd.is_empty() { None } else { Some(p) })?
+        run_cli("sh", &["-c", &command], Some(p))?
     };
     
     if res.exit_code == 0 {

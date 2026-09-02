@@ -35,6 +35,7 @@ pub fn start_tunnel(
     _app_handle: tauri::AppHandle,
     state: tauri::State<'_, TunnelState>,
     local_port: u16,
+    custom_relay: Option<String>,
 ) -> AppResult<TunnelInfo> {
     if local_port == 0 {
         return Err(AppError::Custom("Port must be between 1 and 65535".to_string()));
@@ -48,8 +49,17 @@ pub fn start_tunnel(
         return Err(AppError::Custom(format!("Port {} is already tunneled.", local_port)));
     }
 
-    // Use serveo.net for free SSH tunneling
-    // ssh -R 80:localhost:{port} nokey@serveo.net
+    let relay_target = match custom_relay {
+        Some(ref r) if !r.trim().is_empty() => {
+            let trimmed = r.trim();
+            if trimmed.starts_with('-') || trimmed.contains(|c: char| c.is_whitespace() || ";|&$`<>".contains(c)) {
+                return Err(AppError::Custom("Invalid custom relay format".to_string()));
+            }
+            trimmed.to_string()
+        }
+        _ => "nokey@serveo.net".to_string(),
+    };
+
     let mut child = Command::new("ssh")
         .args([
             "-o",
@@ -58,7 +68,7 @@ pub fn start_tunnel(
             "ServerAliveInterval=60",
             "-R",
             &format!("80:localhost:{}", local_port),
-            "nokey@serveo.net",
+            &relay_target,
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

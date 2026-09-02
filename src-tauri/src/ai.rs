@@ -267,7 +267,8 @@ impl ContextBundle {
         // Hard truncate from the end if still too large
         let mut result = String::new();
         for (label, content) in &sections {
-            result.push_str(&format!("## {}\n{}\n\n", label, content));
+            let redacted = redact_sensitive_data(content);
+            result.push_str(&format!("## {}\n{}\n\n", label, redacted));
         }
         if result.len() > MAX_CONTEXT_CHARS {
             const TRUNC_MSG: &str = "\n...(truncated)";
@@ -281,6 +282,39 @@ impl ContextBundle {
         }
         result
     }
+}
+
+use std::sync::OnceLock;
+
+static RE_BEARER: OnceLock<regex::Regex> = OnceLock::new();
+static RE_JWT: OnceLock<regex::Regex> = OnceLock::new();
+static RE_KEY_VAL: OnceLock<regex::Regex> = OnceLock::new();
+
+pub fn redact_sensitive_data(input: &str) -> String {
+    let re_bearer = RE_BEARER.get_or_init(|| regex::Regex::new(r"(?i)bearer\s+[A-Za-z0-9_\-\.]{10,}").unwrap());
+    let re_jwt = RE_JWT.get_or_init(|| regex::Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}").unwrap());
+    let re_key_val = RE_KEY_VAL.get_or_init(|| regex::Regex::new(r#"(?i)(api[_-]?key|secret|password|passwd|access[_-]?token)\s*[:=]\s*['"]?[A-Za-z0-9_\-\.]{8,}['"]?"#).unwrap());
+
+    let mut out = String::with_capacity(input.len());
+    for line in input.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_lowercase();
+        if lower.starts_with("authorization:") || lower.starts_with("authorization =") {
+            out.push_str("Authorization: [REDACTED_AUTH_HEADER]\n");
+        } else if lower.starts_with("cookie:") || lower.starts_with("set-cookie:") {
+            out.push_str("Cookie: [REDACTED_COOKIE]\n");
+        } else if lower.starts_with("proxy-authorization:") {
+            out.push_str("Proxy-Authorization: [REDACTED]\n");
+        } else {
+            let mut scrubbed = line.to_string();
+            scrubbed = re_bearer.replace_all(&scrubbed, "Bearer [REDACTED_TOKEN]").to_string();
+            scrubbed = re_jwt.replace_all(&scrubbed, "[REDACTED_JWT]").to_string();
+            scrubbed = re_key_val.replace_all(&scrubbed, "$1: [REDACTED]").to_string();
+            out.push_str(&scrubbed);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 fn truncate_to_char_boundary(s: &str, max_bytes: usize) -> &str {
@@ -493,6 +527,36 @@ async fn call_mistral(client: &Client, api_key: &str, context: &str) -> AppResul
     parse_diagnosis_json(&content)
 }
 
+async fn call_ollama_diagnosis(client: &Client, context: &str) -> AppResult<Diagnosis> {
+    let prompt = format!(
+        "You are a root-cause diagnostic assistant. Given terminal output, git diffs, and network traces, identify the most likely cause of failure. Respond ONLY in valid JSON with this exact schema:\n\
+        {{\"cause\": \"string\", \"confidence\": \"high|medium|low\", \"explanation\": \"string\", \"suggested_fix\": \"string\", \"related_files\": []}}\n\n\
+        Failure Context:\n{}",
+        context
+    );
+
+    let req_body = OllamaRequest {
+        model: "llama3".to_string(),
+        prompt,
+        stream: false,
+    };
+
+    let res = client
+        .post("http://localhost:11434/api/generate")
+        .json(&req_body)
+        .send()
+        .await
+        .map_err(|e| format!("Ollama connection error: {}", e))?;
+
+    if !res.status().is_success() {
+        let err_body = res.text().await.unwrap_or_default();
+        return Err(format!("Ollama error: {}", err_body).into());
+    }
+
+    let parsed: OllamaResponse = res.json().await.map_err(|e| format!("Ollama JSON error: {}", e))?;
+    parse_diagnosis_json(&parsed.response)
+}
+
 #[tauri::command]
 pub async fn diagnose_issue(
     app: tauri::AppHandle,
@@ -503,9 +567,7 @@ pub async fn diagnose_issue(
     sys_state: State<'_, SysState>,
     diagnosis_state: State<'_, DiagnosisState>,
 ) -> AppResult<DiagnosisReport> {
-    // Check API key — silently fail if not configured
-    let api_key = secrets::get_secret_internal(&secrets_state, MISTRAL_API_KEY)
-        .ok_or_else(|| "AI Copilot not configured — add MISTRAL_API_KEY in Secrets".to_string())?;
+    let maybe_api_key = secrets::get_secret_internal(&secrets_state, MISTRAL_API_KEY);
 
     let key = cache_key(&trigger);
 
@@ -539,7 +601,13 @@ pub async fn diagnose_issue(
         return Err(AppError::Custom("No diagnostic context available".to_string()));
     }
 
-    let diagnosis = call_mistral(&diagnosis_state.client, &api_key, &context_str).await?;
+    // Use Mistral Cloud AI (with sensitive token redaction) if API key is present; otherwise fall back to local Ollama
+    let diagnosis = if let Some(api_key) = maybe_api_key {
+        call_mistral(&diagnosis_state.client, &api_key, &context_str).await?
+    } else {
+        call_ollama_diagnosis(&diagnosis_state.client, &context_str).await
+            .map_err(|_| AppError::Custom("AI Copilot not configured — configure MISTRAL_API_KEY in Secrets or ensure local Ollama is running".to_string()))?
+    };
 
     // Cache result with LRU deterministic bounded eviction (max 100 entries)
     {
@@ -552,7 +620,7 @@ pub async fn diagnose_issue(
 
 #[tauri::command]
 pub fn is_copilot_configured(secrets_state: State<'_, SecretsState>) -> bool {
-    secrets::get_secret_internal(&secrets_state, MISTRAL_API_KEY).is_some()
+    secrets::get_secret_internal(&secrets_state, MISTRAL_API_KEY).is_some() || crate::system_tools::is_ollama_running()
 }
 
 // ── Property-Based Tests ─────────────────────────────────────────────────────

@@ -51,29 +51,32 @@ impl AllowedPathsState {
     }
 
     pub fn is_allowed(&self, path: &Path) -> bool {
-        let canon = if path.exists() {
-            path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-        } else if let Some(parent) = path.parent() {
+        let normalized = normalize_path(path);
+        let canon = if normalized.exists() {
+            normalized.canonicalize().unwrap_or(normalized)
+        } else if let Some(parent) = normalized.parent() {
             if parent.exists() {
                 if let Ok(p_canon) = parent.canonicalize() {
-                    if let Some(file_name) = path.file_name() {
+                    if let Some(file_name) = normalized.file_name() {
                         p_canon.join(file_name)
                     } else {
                         p_canon
                     }
                 } else {
-                    path.to_path_buf()
+                    normalized
                 }
             } else {
-                path.to_path_buf()
+                normalized
             }
         } else {
-            path.to_path_buf()
+            normalized
         };
 
+        let canon_norm = normalize_path(&canon);
         let lock = lock_poison_recover(&self.allowed_roots);
         for root in lock.iter() {
-            if canon.starts_with(root) {
+            let root_norm = normalize_path(root);
+            if canon_norm.starts_with(&root_norm) {
                 return true;
             }
         }
@@ -81,29 +84,27 @@ impl AllowedPathsState {
     }
 }
 
-pub fn validate_path(path: &str, state: &AllowedPathsState) -> AppResult<PathBuf> {
-    let p = PathBuf::from(path);
-    let canon = if p.exists() {
-        p.canonicalize().unwrap_or_else(|_| p.clone())
-    } else if let Some(parent) = p.parent() {
-        if parent.exists() {
-            if let Ok(p_canon) = parent.canonicalize() {
-                if let Some(file_name) = p.file_name() {
-                    p_canon.join(file_name)
-                } else {
-                    p_canon
-                }
-            } else {
-                p.clone()
+pub fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for comp in path.components() {
+        match comp {
+            std::path::Component::Prefix(p) => normalized.push(p.as_os_str()),
+            std::path::Component::RootDir => normalized.push(comp.as_os_str()),
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
             }
-        } else {
-            p.clone()
+            std::path::Component::Normal(c) => {
+                normalized.push(c);
+            }
         }
-    } else {
-        p.clone()
-    };
+    }
+    normalized
+}
 
-    if !state.is_allowed(&canon) {
+pub fn validate_path(path: &str, state: &AllowedPathsState) -> AppResult<PathBuf> {
+    let p = normalize_path(Path::new(path));
+    if !state.is_allowed(&p) {
         return Err(AppError::Custom(format!(
             "Access denied: path '{}' is outside opened workspaces",
             path
@@ -114,7 +115,13 @@ pub fn validate_path(path: &str, state: &AllowedPathsState) -> AppResult<PathBuf
 
 #[tauri::command]
 pub fn add_allowed_path(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
-    let p = PathBuf::from(&path);
+    let p = normalize_path(Path::new(&path));
+    if !p.is_absolute() {
+        return Err(AppError::Custom("Allowed path must be absolute".to_string()));
+    }
+    if !p.exists() || !p.is_dir() {
+        return Err(AppError::Custom("Allowed path must be an existing directory".to_string()));
+    }
     state.allow(&p);
     Ok(())
 }
@@ -496,7 +503,16 @@ pub fn move_file(source: String, dest: String, state: tauri::State<'_, AllowedPa
 #[tauri::command]
 pub fn delete_file(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
     let p = validate_path(&path, &state)?;
-    fs::remove_file(p).map_err(AppError::from)
+    // Attempt moving to OS Recycle Bin first to prevent catastrophic accidental data loss
+    if trash::delete(&p).is_err() {
+        // Fallback to permanent deletion if Recycle Bin is unavailable (e.g. non-local or network mounts)
+        if p.is_dir() {
+            fs::remove_dir_all(&p).map_err(AppError::from)?;
+        } else {
+            fs::remove_file(&p).map_err(AppError::from)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn build_tree(path: &std::path::Path, current_depth: u8, max_depth: u8) -> TreeMapNode {

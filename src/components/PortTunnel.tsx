@@ -44,18 +44,26 @@ export const PortTunnel = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleExpose = async () => {
+  const [customRelay, setCustomRelay] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleExpose = () => {
     const port = parseInt(portInput);
     if (isNaN(port) || port <= 0 || port > 65535) {
       toast.error('Invalid port', 'Port must be between 1 and 65535');
       return;
     }
+    setShowConfirm(true);
+  };
 
+  const confirmAndExpose = async () => {
+    const port = parseInt(portInput);
+    setShowConfirm(false);
     setIsConnecting(true);
     setLogs((prev) => [...prev, `Connecting to relay server for port ${port}...`]);
 
     try {
-      await invoke('start_tunnel', { localPort: port });
+      await invoke('start_tunnel', { localPort: port, customRelay: customRelay.trim() || null });
       toast.success('Tunnel Started', `Port ${port} is now exposed.`);
       setPortInput('');
       await fetchTunnels();
@@ -82,7 +90,7 @@ export const PortTunnel = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-[#0a0f18] text-white p-6 gap-6">
+    <div className="flex flex-col h-full w-full bg-[#0a0f18] text-white p-6 gap-6 relative">
       <div className="flex justify-between items-center border-b border-white/10 pb-4">
         <div>
           <h2 className="font-bold text-teal-400 text-2xl mb-1">Local Port Tunneling</h2>
@@ -92,18 +100,58 @@ export const PortTunnel = () => {
         </div>
         <div className="flex items-center gap-2 text-sm font-mono bg-black px-4 py-2 rounded-full border border-white/10">
           <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-          CodexOS Relay Network Active
+          {customRelay.trim() ? `Relay: ${customRelay.trim()}` : 'CodexOS Relay Active'}
         </div>
       </div>
 
-      <div className="flex gap-4">
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#111827] border border-amber-500/50 rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <h3 className="font-bold text-lg text-amber-300">Confirm External Network Exposure</h3>
+            </div>
+            <p className="text-sm text-gray-300 leading-relaxed">
+              You are about to expose local port <strong className="text-white font-mono">{portInput}</strong> to the public internet via{' '}
+              <strong className="text-teal-300 font-mono">{customRelay.trim() || 'nokey@serveo.net'}</strong>.
+            </p>
+            <p className="text-xs text-amber-200/70">
+              Ensure you do not expose private credentials, administrative dashboards, or unauthenticated services.
+            </p>
+            <div className="flex justify-end gap-3 mt-2">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded font-medium text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAndExpose}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-black font-bold rounded text-sm transition-colors shadow-lg"
+              >
+                I Understand, Expose Port
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-4">
         <input
           type="number"
           placeholder="Local Port (e.g. 3000)"
           value={portInput}
           onChange={(e) => setPortInput(e.target.value)}
           disabled={isConnecting}
-          className="w-1/3 bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-teal-500 focus:outline-none disabled:opacity-50"
+          className="w-full sm:w-1/3 bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-teal-500 focus:outline-none disabled:opacity-50"
+        />
+        <input
+          type="text"
+          placeholder="Custom SSH Relay (default: nokey@serveo.net)"
+          value={customRelay}
+          onChange={(e) => setCustomRelay(e.target.value)}
+          disabled={isConnecting}
+          className="w-full sm:w-1/2 bg-black/50 border border-white/10 rounded p-3 text-white font-mono text-sm focus:border-teal-500 focus:outline-none disabled:opacity-50"
         />
         <button
           onClick={handleExpose}

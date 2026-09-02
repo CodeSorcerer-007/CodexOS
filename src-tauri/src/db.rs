@@ -59,23 +59,34 @@ pub struct SqliteResult {
     pub rows: Vec<Vec<String>>,
 }
 
-#[tauri::command]
-pub fn query_sqlite(path: String, query: String) -> AppResult<SqliteResult> {
+pub fn query_sqlite_internal(
+    path: &str,
+    query: &str,
+    allowed_paths: Option<&crate::files::AllowedPathsState>,
+) -> AppResult<SqliteResult> {
     use rusqlite::{types::ValueRef, Connection};
     use std::path::Path;
 
-    if path != ":memory:" {
-        let p = Path::new(&path);
+    let target_path = if path != ":memory:" {
+        let p = Path::new(path);
         if !p.exists() || !p.is_file() {
             return Err(crate::error::AppError::Custom(format!(
                 "SQLite database file not found: {}",
                 path
             )));
         }
-    }
+        if let Some(state) = allowed_paths {
+            let validated = crate::files::validate_path(path, state)?;
+            validated.to_string_lossy().to_string()
+        } else {
+            path.to_string()
+        }
+    } else {
+        path.to_string()
+    };
 
-    let conn = Connection::open(&path).map_err(|e| e.to_string())?;
-    let mut stmt = conn.prepare(&query).map_err(|e| e.to_string())?;
+    let conn = Connection::open(&target_path).map_err(|e| e.to_string())?;
+    let mut stmt = conn.prepare(query).map_err(|e| e.to_string())?;
 
     let column_names: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
     let column_count = column_names.len();
@@ -108,15 +119,25 @@ pub fn query_sqlite(path: String, query: String) -> AppResult<SqliteResult> {
     })
 }
 
+#[tauri::command]
+pub fn query_sqlite(
+    path: String,
+    query: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<SqliteResult> {
+    query_sqlite_internal(&path, &query, Some(&allowed_paths))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_query_sqlite_memory() {
-        let res = query_sqlite(
-            ":memory:".to_string(),
-            "SELECT 1 AS id, 'alice' AS name, NULL AS extra;".to_string(),
+        let res = query_sqlite_internal(
+            ":memory:",
+            "SELECT 1 AS id, 'alice' AS name, NULL AS extra;",
+            None,
         )
         .unwrap();
 
@@ -127,18 +148,20 @@ mod tests {
 
     #[test]
     fn test_query_sqlite_syntax_error() {
-        let res = query_sqlite(
-            ":memory:".to_string(),
-            "INVALID SQL STATEMENT;".to_string(),
+        let res = query_sqlite_internal(
+            ":memory:",
+            "INVALID SQL STATEMENT;",
+            None,
         );
         assert!(res.is_err());
     }
 
     #[test]
     fn test_query_sqlite_non_existent_file() {
-        let res = query_sqlite(
-            "C:\\non_existent_path_12345\\db.sqlite".to_string(),
-            "SELECT 1;".to_string(),
+        let res = query_sqlite_internal(
+            "C:\\non_existent_path_12345\\db.sqlite",
+            "SELECT 1;",
+            None,
         );
         assert!(res.is_err());
     }

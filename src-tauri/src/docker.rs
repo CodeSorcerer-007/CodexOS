@@ -119,6 +119,7 @@ pub async fn stream_docker_logs(
             &tail_lines.to_string(),
             validated_id,
         ])
+        .kill_on_drop(true)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -134,8 +135,11 @@ pub async fn stream_docker_logs(
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = reader.next_line().await {
-            let _ = app_handle_clone.emit(&event_clone, line);
+            if app_handle_clone.emit(&event_clone, line).is_err() {
+                break;
+            }
         }
+        let _ = child.kill().await;
     });
 
     tokio::spawn(async move {
@@ -181,6 +185,7 @@ pub async fn docker_pull_image(image: String, app_handle: tauri::AppHandle) -> A
 
     let mut child = Command::new("docker")
         .args(["pull", validated_img])
+        .kill_on_drop(true)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -196,8 +201,11 @@ pub async fn docker_pull_image(image: String, app_handle: tauri::AppHandle) -> A
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = reader.next_line().await {
-            let _ = app_handle_clone.emit(&event_clone, line);
+            if app_handle_clone.emit(&event_clone, line).is_err() {
+                break;
+            }
         }
+        let _ = child.wait().await;
     });
 
     tokio::spawn(async move {

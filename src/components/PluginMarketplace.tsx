@@ -113,9 +113,12 @@ export const PluginMarketplace = () => {
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/10 pb-5">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Store className="w-7 h-7 text-amber-400" />
             <h2 className="font-extrabold text-2xl text-white tracking-tight">P2P Plugin Marketplace</h2>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              Developer Preview
+            </span>
           </div>
           <p className="text-sm text-gray-400 mt-1">Discover, install, and share WebAssembly plugins peer-to-peer across your local network.</p>
         </div>

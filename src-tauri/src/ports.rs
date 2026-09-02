@@ -161,10 +161,19 @@ pub fn spawn_local_server(path: String) -> AppResult<String> {
     use std::thread;
     use tiny_http::{Response, Server};
 
-    let port = 8080;
-    let server_addr = format!("127.0.0.1:{}", port);
-    let server = Server::http(&server_addr)
-        .map_err(|e| format!("Failed to bind local server to {}: {}", server_addr, e))?;
+    let mut bound_server = None;
+    let mut bound_port = 8080;
+    for p in 8080..=8099 {
+        let server_addr = format!("127.0.0.1:{}", p);
+        if let Ok(s) = Server::http(&server_addr) {
+            bound_server = Some(s);
+            bound_port = p;
+            break;
+        }
+    }
+    let server = bound_server.ok_or_else(|| {
+        AppError::Custom("Failed to bind local server: all ports in range 8080-8099 are in use".to_string())
+    })?;
 
     thread::spawn(move || {
         for request in server.incoming_requests() {
@@ -196,7 +205,7 @@ pub fn spawn_local_server(path: String) -> AppResult<String> {
         }
     });
 
-    Ok(format!("http://127.0.0.1:{}", port))
+    Ok(format!("http://127.0.0.1:{}", bound_port))
 }
 
 /// Executes the start_tail_log command.
@@ -249,13 +258,25 @@ pub fn stop_tail_log(state: State<'_, TailState>) -> AppResult<()> {
     Ok(())
 }
 
-/// Executes the execute_http_request command.
+/// Executes the execute_http_request command with SSRF protection.
 #[tauri::command]
 pub async fn execute_http_request(
     url: String,
     method: String,
     body: Option<String>,
 ) -> AppResult<String> {
+    let parsed_url: hyper::Uri = url
+        .parse()
+        .map_err(|e: hyper::http::uri::InvalidUri| AppError::Custom(format!("Invalid URL: {}", e)))?;
+    let host = parsed_url.host().unwrap_or("").to_string();
+
+    if crate::proxy::is_ssrf_blocked(&host, &[]) {
+        return Err(AppError::Custom(format!(
+            "SSRF Blocked: Destination '{}' is a private, loopback, or cloud metadata address.",
+            host
+        )));
+    }
+
     tauri::async_runtime::spawn_blocking(move || {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(30))

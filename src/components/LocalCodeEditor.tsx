@@ -83,14 +83,20 @@ export const LocalCodeEditor = () => {
         const path = withoutPrefix.substring(firstSlash);
         invoke<string>('ssh_read_file_text', { connection, path })
           .then(setContent)
-          .catch(e => console.error(e.toString()));
+          .catch(e => {
+            console.error(e.toString());
+            toastError('Failed to load remote file', e instanceof Error ? e.message : String(e));
+          });
       }
     } else {
       invoke<string>('read_file_text', { path: selectedFile })
         .then(setContent)
-        .catch(e => console.error(e.toString()));
+        .catch(e => {
+          console.error(e.toString());
+          toastError('Failed to open file', e instanceof Error ? e.message : String(e));
+        });
     }
-  }, [selectedFile]);
+  }, [selectedFile, toastError]);
 
   const handleSave = async () => {
     if (!selectedFile) return;
