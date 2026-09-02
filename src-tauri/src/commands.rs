@@ -40,6 +40,7 @@ pub fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wr
         kv::kv_get,
         plugin::run_wasm_plugin,
         plugin::run_wasi_nano_vm,
+        plugin::execute_marketplace_plugin,
         sys::get_sys_stats,
         sys::get_api_version,
         sys::get_top_processes_memory,
