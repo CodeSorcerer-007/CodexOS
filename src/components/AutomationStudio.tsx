@@ -91,6 +91,41 @@ export const AutomationStudio = () => {
 
   const onConnect = useCallback((params: Edge | Connection) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [completedNodeIds, setCompletedNodeIds] = useState<Set<string>>(new Set());
+  const [failedNodeIds, setFailedNodeIds] = useState<Set<string>>(new Set());
+
+  const getTopologicalOrder = (): AutomationNode[] => {
+    const inDegree: Record<string, number> = {};
+    const adj: Record<string, string[]> = {};
+
+    nodes.forEach(n => {
+      inDegree[n.id] = 0;
+      adj[n.id] = [];
+    });
+
+    edges.forEach(e => {
+      if (adj[e.source]) adj[e.source].push(e.target);
+      if (inDegree[e.target] !== undefined) inDegree[e.target]++;
+    });
+
+    const queue = nodes.filter(n => inDegree[n.id] === 0).map(n => n.id);
+    const sortedIds: string[] = [];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      sortedIds.push(current);
+      for (const neighbor of adj[current] || []) {
+        inDegree[neighbor]--;
+        if (inDegree[neighbor] === 0) queue.push(neighbor);
+      }
+    }
+
+    const remaining = nodes.filter(n => !sortedIds.includes(n.id)).map(n => n.id);
+    const allOrderedIds = [...sortedIds, ...remaining];
+    return allOrderedIds.map(id => nodes.find(n => n.id === id)!).filter(Boolean);
+  };
+
   const runPipeline = async () => {
     if (!currentPath) {
       toastError('Execution Failed', 'No workspace selected');
@@ -98,37 +133,66 @@ export const AutomationStudio = () => {
     }
     
     setIsRunning(true);
-    setLogs(['Starting automation pipeline...']);
+    setCompletedNodeIds(new Set());
+    setFailedNodeIds(new Set());
+    setLogs([`[${new Date().toLocaleTimeString()}] Initializing Directed Acyclic Graph (DAG) pipeline...`]);
     
-    for (const node of nodes) {
-      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Executing node: ${node.data.label}`]);
+    const orderedNodes = getTopologicalOrder();
+    let hasFailure = false;
+
+    for (const node of orderedNodes) {
+      setActiveNodeId(node.id);
+      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ▶ Executing: ${node.data.label}`]);
       
       if (node.data.label.startsWith('Run:')) {
         const cmd = node.data.label.replace('Run:', '').trim();
         try {
            const result = await invoke<string>('execute_command', { command: cmd, cwd: currentPath });
-           setLogs(prev => [...prev, result]);
+           setLogs(prev => [...prev, result || '(Command executed successfully with empty output)']);
+           setCompletedNodeIds(prev => new Set(prev).add(node.id));
         } catch (e: unknown) {
-           setLogs(prev => [...prev, `[ERROR] ${e}`]);
-           toastError('Pipeline Command Failed', e instanceof Error ? e.message : String(e));
-           break; // Stop pipeline on error
+           const errStr = e instanceof Error ? e.message : String(e);
+           setLogs(prev => [...prev, `[ERROR] ${errStr}`]);
+           setFailedNodeIds(prev => new Set(prev).add(node.id));
+           toastError('Pipeline Command Failed', errStr);
+           hasFailure = true;
+           break;
         }
+      } else if (node.data.label.includes('Notify')) {
+        setLogs(prev => [...prev, `✓ [NOTIFICATION] ${node.data.label}`]);
+        setCompletedNodeIds(prev => new Set(prev).add(node.id));
+        toastSuccess('Pipeline Notification', node.data.label);
+      } else {
+        setCompletedNodeIds(prev => new Set(prev).add(node.id));
       }
 
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 400));
     }
 
-    setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Pipeline execution finished.`]);
+    setActiveNodeId(null);
+    if (!hasFailure) {
+      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Pipeline completed successfully!`]);
+      toastSuccess('Pipeline Complete', 'All nodes executed in DAG order.');
+    } else {
+      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Pipeline stopped due to execution failure.`]);
+    }
     setIsRunning(false);
   };
 
   const addNode = (label: string) => {
     const newNode = {
-      id: `${nodes.length + 1}`,
+      id: `${Date.now()}`,
       data: { label },
-      position: { x: Math.random() * 300, y: Math.random() * 300 },
+      position: { x: 200 + Math.random() * 150, y: 100 + Math.random() * 200 },
     };
     setNodes((nds) => nds.concat(newNode));
+  };
+
+  const addCustomCommand = () => {
+    const cmd = prompt('Enter shell command for new pipeline step:', 'npm test');
+    if (cmd && cmd.trim()) {
+      addNode(`Run: ${cmd.trim()}`);
+    }
   };
 
   return (
@@ -140,6 +204,9 @@ export const AutomationStudio = () => {
         </h2>
         
         <div className="flex flex-col gap-2 mt-4">
+          <button onClick={addCustomCommand} className="flex items-center gap-2 bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 p-2 rounded text-sm hover:bg-cyan-500/30 font-bold">
+            <Plus className="w-3 h-3" /> Custom Shell Step
+          </button>
           <button onClick={() => addNode('Run: npm run build')} className="flex items-center gap-2 bg-white/5 border border-white/10 p-2 rounded text-sm hover:bg-white/10">
             <Plus className="w-3 h-3" /> Run Build
           </button>
@@ -149,7 +216,7 @@ export const AutomationStudio = () => {
           <button onClick={() => addNode('Run: cargo test')} className="flex items-center gap-2 bg-white/5 border border-white/10 p-2 rounded text-sm hover:bg-white/10">
             <Plus className="w-3 h-3" /> Cargo Test
           </button>
-          <button onClick={() => addNode('Notify Success')} className="flex items-center gap-2 bg-white/5 border border-white/10 p-2 rounded text-sm hover:bg-white/10">
+          <button onClick={() => addNode('Notify Pipeline Success')} className="flex items-center gap-2 bg-white/5 border border-white/10 p-2 rounded text-sm hover:bg-white/10">
             <Plus className="w-3 h-3" /> Notification
           </button>
         </div>
@@ -167,7 +234,7 @@ export const AutomationStudio = () => {
             className={`flex items-center justify-center gap-2 w-full font-bold py-2 rounded transition-colors ${isRunning || !currentPath ? 'bg-gray-600 text-gray-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.3)]'}`}
           >
             <PlayCircle className="w-4 h-4" />
-            {isRunning ? 'Running...' : 'Run Pipeline'}
+            {isRunning ? 'Executing DAG...' : 'Run Pipeline'}
           </button>
         </div>
       </div>
@@ -175,7 +242,20 @@ export const AutomationStudio = () => {
       <div className="flex-1 relative flex flex-col">
         <div className="flex-1" style={{ width: '100%', height: '100%' }}>
           <ReactFlow
-            nodes={nodes}
+            nodes={nodes.map((n) => {
+              let borderClass = 'border-white/20';
+              if (activeNodeId === n.id) {
+                borderClass = 'border-cyan-400 ring-2 ring-cyan-400 animate-pulse';
+              } else if (failedNodeIds.has(n.id)) {
+                borderClass = 'border-red-500 ring-2 ring-red-500';
+              } else if (completedNodeIds.has(n.id)) {
+                borderClass = 'border-emerald-500 ring-1 ring-emerald-500';
+              }
+              return {
+                ...n,
+                className: `${borderClass} shadow-xl transition-all`,
+              };
+            })}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
