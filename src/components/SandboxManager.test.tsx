@@ -3,10 +3,10 @@ import { render, screen } from '@testing-library/react';
 import { SandboxManager } from './SandboxManager';
 
 describe('SandboxManager component', () => {
-  test('renders sandbox manager with coming soon banner', () => {
+  test('renders WASI Nano-VM sandbox interface', () => {
     render(<SandboxManager currentPath="/test/workspace" />);
-    expect(screen.getByRole('heading', { name: /nano-vm sandbox/i })).toBeInTheDocument();
-    expect(screen.getByText(/Not Yet Implemented/i)).toBeInTheDocument();
-    expect(screen.getByText(/WASI Preview 2/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /wasi nano-vm sandbox/i })).toBeInTheDocument();
+    expect(screen.getByText(/Sandboxed Execution Active/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /boot nano-vm/i })).toBeInTheDocument();
   });
 });

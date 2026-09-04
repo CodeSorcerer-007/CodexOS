@@ -208,13 +208,13 @@ describe('SettingsPage — AI Root-Cause Copilot section', () => {
 
   // ── Requirement 1.3 ─────────────────────────────────────────────────────────
   describe('API key status — not configured', () => {
-    it('renders the amber "Set up API Key →" link when is_copilot_configured returns false', async () => {
+    it('renders the amber "Configure Mistral Key →" link when is_copilot_configured returns false', async () => {
       mockedInvoke.mockResolvedValue(false);
 
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Set up API Key/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Configure Mistral Key/i })).toBeInTheDocument();
       });
     });
 
@@ -224,35 +224,35 @@ describe('SettingsPage — AI Root-Cause Copilot section', () => {
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /Set up API Key/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Configure Mistral Key/i })).toBeInTheDocument();
       });
 
-      expect(screen.queryByText(/API Key Configured/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Ready \(Hybrid \/ Local\)/i)).not.toBeInTheDocument();
     });
   });
 
   // ── Requirement 1.4 ─────────────────────────────────────────────────────────
   describe('API key status — configured', () => {
-    it('renders the green "API Key Configured" chip when is_copilot_configured returns true', async () => {
+    it('renders the green "Ready (Hybrid / Local)" chip when is_copilot_configured returns true', async () => {
       mockedInvoke.mockResolvedValue(true);
 
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/API Key Configured/i)).toBeInTheDocument();
+        expect(screen.getByText(/Ready \(Hybrid \/ Local\)/i)).toBeInTheDocument();
       });
     });
 
-    it('does NOT render the amber "Set up API Key →" link when is_copilot_configured returns true', async () => {
+    it('does NOT render the amber "Configure Mistral Key →" link when is_copilot_configured returns true', async () => {
       mockedInvoke.mockResolvedValue(true);
 
       render(<SettingsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/API Key Configured/i)).toBeInTheDocument();
+        expect(screen.getByText(/Ready \(Hybrid \/ Local\)/i)).toBeInTheDocument();
       });
 
-      expect(screen.queryByRole('button', { name: /Set up API Key/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Configure Mistral Key/i })).not.toBeInTheDocument();
     });
   });
 });

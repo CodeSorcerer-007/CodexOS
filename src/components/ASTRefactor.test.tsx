@@ -22,7 +22,7 @@ describe('ASTRefactor component', () => {
 
   test('renders AST structural refactoring interface', () => {
     render(<ASTRefactor currentPath="/test/workspace" />);
-    expect(screen.getByText(/AST Engine/i)).toBeInTheDocument();
+    expect(screen.getByText(/AST Refactor & Code Engine/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /analyze code/i })).toBeInTheDocument();
   });
 

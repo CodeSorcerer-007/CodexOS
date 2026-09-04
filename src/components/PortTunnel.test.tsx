@@ -40,8 +40,11 @@ describe('PortTunnel component', () => {
     const exposeBtn = screen.getByRole('button', { name: /expose port/i });
     fireEvent.click(exposeBtn);
 
+    const confirmBtn = screen.getByRole('button', { name: /I Understand, Expose Port/i });
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith('start_tunnel', { localPort: 8080 });
+      expect(invoke).toHaveBeenCalledWith('start_tunnel', { localPort: 8080, customRelay: null });
     });
   });
 
