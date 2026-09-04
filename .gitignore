@@ -32,6 +32,7 @@ playwright-report/
 
 # Internal agent scaffolding (not part of the shipped app)
 .agents/
+.kiro/
 
 # Secrets and credentials
 .env

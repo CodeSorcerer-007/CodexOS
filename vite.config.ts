@@ -49,7 +49,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/setupTests.ts',
-    exclude: ['e2e/**', 'tests/**', 'node_modules/**'],
+    exclude: ['e2e/**', 'node_modules/**'],
     testTimeout: 30000,
     fileParallelism: false,
     maxWorkers: 1,
