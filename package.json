@@ -25,7 +25,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "@xyflow/react": "^12.11.3",
-    "framer-motion": "^12.43.0",
+    "framer-motion": "^13.1.0",
     "lucide-react": "^1.28.0",
     "monaco-editor": "^0.56.0",
     "qrcode.react": "^4.2.0",
