@@ -23,36 +23,28 @@ pub fn get_db_conn(app_handle: &tauri::AppHandle) -> rusqlite::Result<Connection
         .unwrap_or_else(|_| PathBuf::from("."));
     std::fs::create_dir_all(&path).unwrap_or_default();
     path.push("codexos.db");
-    let conn = Connection::open(path)?;
+    let mut conn = Connection::open(path)?;
 
     // Enable WAL mode & fast synchronous for desktop concurrency and write throughput
     let _ = conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;");
 
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS proxy_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            method TEXT NOT NULL,
-            url TEXT NOT NULL,
-            request_headers TEXT NOT NULL,
-            request_body TEXT NOT NULL,
-            response_status INTEGER NOT NULL,
-            response_headers TEXT NOT NULL,
-            response_body TEXT NOT NULL,
-            timestamp INTEGER NOT NULL,
-            duration_ms INTEGER NOT NULL
-        )",
-        [],
-    )?;
-
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS store_kv (
-            key TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        )",
-        [],
-    )?;
+    // Execute atomic SQLite schema migrations
+    if let Err(e) = crate::db_migration::run_migrations(&mut conn) {
+        log::error!("Failed to apply SQLite schema migrations: {:?}", e);
+    }
 
     Ok(conn)
+}
+
+#[tauri::command]
+pub fn get_db_migration_status(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, KvState>,
+) -> Result<crate::db_migration::MigrationStatus, String> {
+    with_kv_db(&app_handle, &state, |conn| {
+        crate::db_migration::get_migration_status(conn).ok()
+    })
+    .ok_or_else(|| "Failed to query database migration status".to_string())
 }
 
 pub fn with_kv_db<F, R>(app_handle: &tauri::AppHandle, state: &KvState, f: F) -> Option<R>

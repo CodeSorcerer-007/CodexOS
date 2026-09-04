@@ -32,6 +32,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,6 +42,14 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/CodeSorcerer-007/CodexOS/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVBRDNDRTkzQUU4RTg2RjQKUldSSlQ5c3N3RkxHUk1UcXF6QkMxc1dYd1l4aWRzM3U3eVRvczBNUjV0Z2xZVG1rU1J3YkFmNncK"
     }
   }
 }

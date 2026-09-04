@@ -16,6 +16,8 @@ pub mod tunnel;
 pub mod vault;
 pub mod hmac_vault;
 pub mod fs_cache;
+pub mod db_migration;
+pub mod diagnostics;
 
 pub mod archive;
 pub mod crypto_tools;
@@ -34,6 +36,7 @@ pub fn run() {
 
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ports::TailState {
             task: Mutex::new(None),
         })
@@ -72,6 +75,10 @@ pub fn run() {
                     .max_file_size(5_242_880)
                     .build(),
             );
+
+            if let Ok(app_dir) = app.path().app_data_dir() {
+                diagnostics::init_panic_hook(app_dir);
+            }
 
             Ok(())
         })
