@@ -7,12 +7,12 @@
   A blazingly fast, deeply integrated system explorer built on Rust, Tauri 2.0, and React 19.
 
   [![Release](https://img.shields.io/badge/version-2.1.0-blue?style=for-the-badge)](https://github.com/CodeSorcerer-007/CodexOS/releases)
-  [![Built with Tauri](https://img.shields.io/badge/Built_with-Tauri_2.0-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](#)
-  [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](#)
-  [![Rust](https://img.shields.io/badge/Rust-1.77+-000000?style=for-the-badge&logo=rust&logoColor=white)](#)
-  [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](#)
-  [![Mistral AI](https://img.shields.io/badge/Mistral-AI_Copilot-FF7000?style=for-the-badge&logo=openai&logoColor=white)](#)
-  [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#)
+  [![Built with Tauri](https://img.shields.io/badge/Built_with-Tauri_2.0-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
+  [![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+  [![Rust](https://img.shields.io/badge/Rust-1.77+-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+  [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+  [![Mistral AI](https://img.shields.io/badge/Mistral-AI_Copilot-FF7000?style=for-the-badge&logo=openai&logoColor=white)](https://mistral.ai/)
+  [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](./LICENSE)
 </div>
 
 <br/>
@@ -30,9 +30,10 @@
 - [✨ AI Root-Cause Copilot](#-ai-root-cause-copilot)
 - [🛠️ Tech Stack](#️-tech-stack)
 - [🏗️ System Architecture](#️-system-architecture)
+- [📚 Documentation Suite](#-documentation-suite)
 - [⚡ Quick Installation](#-quick-installation)
 - [⚙️ Building from Source](#️-building-from-source)
-- [📜 Creator Commit Log & Contributing](#-creator-commit-log--contributing)
+- [🤝 Contributing](#-contributing)
 - [📁 Project Structure](#-project-structure)
 - [🔒 Security & Privacy Guarantees](#-security--privacy-guarantees)
 - [📄 License](#-license)
@@ -52,14 +53,14 @@ CodexOS is packed with high-performance native modules running locally on your h
 | 📊 **Gridline UI & Modern Layout** | High-density card dashboard for immediate system telemetry, favorite directories, recent projects, and quick action execution. |
 | ⚙️ **Process Manager** | Real-time system process monitor with CPU/RAM utilization telemetry, sorting, and safe process termination. |
 | 📄 **Env Manager** | Workspace environment variable editor with `.env` syntax parsing, inline key encryption, and unencrypted export safety warnings. |
-| 📡 **SSH Remote** | Secure remote server file explorer and terminal manager built on native `ssh2` bindings with host key verification. |
+| 📡 **SSH Remote** | Secure remote server file explorer and terminal manager built on OpenSSH CLI wrappers with host key verification. |
 
 ### 🔐 Security & Networking
 | Module | Description |
 |---|---|
 | 🔑 **Secrets Manager** | Encrypted in-memory secrets vault powered by ChaCha20-Poly1305 with run-with-secrets command injection. |
-| 🛡️ **HMAC / ZKP Vault** | Cryptographically signed key-value vault using HMAC-SHA256 zero-knowledge proof verification. |
-| 🌐 **Proxy Interceptor** | Local HTTP/TCP traffic sniffer, debugger, and request replay engine built on hyper. |
+| 🛡️ **HMAC Commitment Vault** | Cryptographically signed key-value vault using HMAC-SHA256 zero-knowledge proof commitment verification. |
+| 🌐 **Proxy Interceptor** | Local HTTP/TCP traffic sniffer, debugger, and request replay engine built on Hyper with an enterprise SSRF firewall. |
 | 🚇 **Port Tunnel** | Secure local port forwarding and reverse proxy tunneling powered by serveo. |
 
 ### 🛠️ Developer Tooling & Diagnostics
@@ -118,16 +119,17 @@ HTTP 4xx / 5xx Error──┘
 | **xterm.js** | 6 | Full terminal emulation with ANSI color support |
 
 ### Backend (Rust / Tauri 2.0)
-| Crate | Purpose |
+| Crate / Tool | Purpose |
 |---|---|
 | **Tauri 2.0** | Secure native application shell & capability-based IPC bridge |
 | **portable-pty** | Cross-platform native PTY session manager |
-| **git2** | Native libgit2 bindings for high-speed offline git operations |
-| **rusqlite** | SQLite persistence for database studio & local KV storage |
+| **Git CLI (`cli_runner`)** | Native Git CLI execution wrapper with argument sanitization |
+| **OpenSSH CLI (`cli_runner`)** | Hardened OpenSSH batch runner with host key verification |
+| **rusqlite** | SQLite persistence for database studio & decoupled local KV storage |
 | **sysinfo** | Real-time CPU, RAM, disk, and process telemetry |
 | **wasmtime** | Sandboxed WASM / WASI plugin execution engine |
 | **ring / chacha20poly1305** | Authenticated encryption and HMAC proof cryptography |
-| **hyper / tokio** | Async HTTP proxy interceptor and network stream listener |
+| **hyper / tokio** | Async HTTP proxy interceptor with SSRF firewall |
 | **reqwest** | Async HTTP client for AI Copilot diagnostics |
 
 ---
@@ -137,7 +139,23 @@ HTTP 4xx / 5xx Error──┘
 - **Multi-Tab Workspace**: Run up to 8 concurrent workspace tabs (`Ctrl+1..8`) with isolated state and persistence.
 - **Lazy-Loaded Modules**: Every tool is dynamically imported via `React.lazy` + `Suspense`, maintaining sub-100ms startup.
 - **Resilient UI Boundaries**: Global React Error Boundaries isolate crashes so individual modules never take down the app.
-- **Typed Rust IPC**: All filesystem, git, networking, and crypto operations execute in Rust with type-safe Tauri 2 `invoke` handlers.
+- **Typed Rust IPC**: All filesystem, git, networking, and crypto operations execute in Rust with type-safe Tauri 2 `invoke` handlers validated at runtime via Zod.
+
+For deep architectural details, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+---
+
+## 📚 Documentation Suite
+
+Comprehensive technical documentation is available in the [`docs/`](./docs/README.md) directory:
+
+- 🏛️ **[System Architecture Guide](./ARCHITECTURE.md)**: Layer responsibilities, security threat model, and SQLite data durability.
+- 📡 **[IPC API Reference](./docs/API_REFERENCE.md)**: Exhaustive catalog of all 129 Tauri IPC commands and security invariants.
+- 📜 **[Architectural Decision Records (ADRs)](./docs/adr/README.md)**: Historical record of foundational design choices.
+- 🚀 **[Enterprise GA Signing Runbook](./docs/ENTERPRISE_GA_SIGNING.md)**: Production code signing, notarization, and auto-updater setup.
+- 📊 **[CodexOS v1 vs. v2 Comparison Report](./docs/V1_VS_V2_COMPARISON.md)**: Deep architectural comparison and hardening analysis.
+- 🔒 **[Security Policy](./SECURITY.md)**: Vulnerability disclosure and supported versions.
+- 🤝 **[Contributing Guide](./CONTRIBUTING.md)**: Code standards, PR guidelines, and test requirements.
 
 ---
 
@@ -166,7 +184,7 @@ iwr -useb https://raw.githubusercontent.com/CodeSorcerer-007/CodexOS/main/instal
 ## ⚙️ Building from Source
 
 ### Prerequisites
-- [Rust](https://rustup.rs/) (latest stable toolchain)
+- [Rust](https://rustup.rs/) (version 1.77 or higher)
 - [Node.js](https://nodejs.org/) (version 20 or higher)
 - Windows MSVC Build Tools (Visual Studio Build Tools 2022) or standard Unix build essentials
 
@@ -192,7 +210,7 @@ npm run lint
 npm test
 
 # Run TypeScript typecheck
-npx tsc --noEmit
+npx tsc -b
 
 # Run Rust backend unit & integration tests
 cd src-tauri && cargo test
@@ -203,18 +221,13 @@ npm run tauri build
 
 ---
 
-## 📜 Creator Commit Log & Contributing
+## 🤝 Contributing
 
-We love contributions! CodexOS features a dedicated **Creator & Contributor Commit Log** where creators can publicly log and document their commit messages, PRs, and feature implementations.
-
-- 📝 **[View & Add to the Commit Log (COMMIT_LOG.md)](./COMMIT_LOG.md)**
-- 🤝 **[Read Contribution Guidelines (CONTRIBUTING.md)](./CONTRIBUTING.md)**
-- 🏛️ **[Review System Architecture (ARCHITECTURE.md)](./ARCHITECTURE.md)**
-
-### How Creators Can Mention Their Commits:
-1. Submit your PR following [Conventional Commits](https://www.conventionalcommits.org/).
-2. Add your commit entry to the top of the table in [`COMMIT_LOG.md`](./COMMIT_LOG.md).
-3. Include your GitHub handle, module scope, commit hash/PR link, and a concise summary.
+We welcome contributions from developers worldwide! Please review our **[CONTRIBUTING.md](./CONTRIBUTING.md)** guide for:
+- Branch naming standards (`feat/<topic>`, `fix/<topic>`)
+- [Conventional Commits](https://www.conventionalcommits.org/) standards
+- Frontend and backend testing requirements
+- Pull request submission checklist
 
 ---
 
@@ -225,11 +238,11 @@ CodexOS/
 ├── src/                          # React 19 Frontend
 │   ├── App.tsx                   # App shell, tab manager, shortcut listeners
 │   ├── components/               # Core feature modules (lazy-loaded)
-│   │   ├── FileGrid.tsx          # Native file vault with Fluent UI icons
+│   │   ├── FileGrid/             # Modular file vault (Context, Main, Toolbar, Treemap, Duplicates)
 │   │   ├── VisualGit.tsx         # Offline visual Git client
 │   │   ├── TerminalMultiplexer.tsx # Multi-session PTY terminal
 │   │   ├── SecretsManager.tsx    # ChaCha20-Poly1305 encrypted vault
-│   │   ├── HMACVault.tsx         # HMAC-SHA256 proof vault
+│   │   ├── HMACVault.tsx         # HMAC-SHA256 commitment vault
 │   │   ├── DockerDashboard.tsx   # Container & image manager
 │   │   ├── DatabaseStudio.tsx    # SQLite query studio
 │   │   ├── NetworkInterceptor.tsx# HTTP/TCP proxy debugger
@@ -250,26 +263,33 @@ CodexOS/
 │   └── lib/                      # Shared frontend utilities
 ├── src-tauri/                    # Rust 2.0 Backend
 │   ├── src/
-│   │   ├── lib.rs                # App entrypoint & Tauri command registry
-│   │   ├── files.rs              # High-speed filesystem operations
-│   │   ├── git.rs                # Libgit2 bindings
+│   │   ├── lib.rs                # App entrypoint & Tauri setup
+│   │   ├── commands.rs           # Central registry of all 129 IPC commands
+│   │   ├── files.rs              # Canonical filesystem sandboxing
+│   │   ├── git.rs                # Native Git CLI operations
 │   │   ├── multiplexer.rs        # PTY session management
 │   │   ├── secrets.rs            # In-memory ChaCha20 encrypted vault
 │   │   ├── hmac_vault.rs         # HMAC commitment proof vault
-│   │   ├── proxy.rs              # Async HTTP/TCP proxy engine
+│   │   ├── proxy.rs              # Async HTTP/TCP proxy engine & SSRF firewall
 │   │   ├── kv.rs                 # Decoupled SQLite key-value persistence
 │   │   ├── ai.rs                 # AI Copilot + Ollama integration
 │   │   ├── sys.rs / system_tools.rs # System telemetry & process tools
 │   │   ├── docker.rs             # Docker engine socket bridge
 │   │   ├── db.rs                 # SQLite runner
-│   │   ├── ssh.rs                # SSH2 remote filesystem client
+│   │   ├── ssh.rs                # OpenSSH remote filesystem client
 │   │   ├── tunnel.rs             # SSH reverse tunneling
 │   │   └── plugin.rs             # Wasmtime sandboxed runner
 │   └── Cargo.toml
-├── docs/                         # Extended API & IPC reference documentation
-├── COMMIT_LOG.md                 # 📜 Creator & contributor commit log
-├── CONTRIBUTING.md               # Contribution standards and guidelines
+├── docs/                         # Technical documentation suite
+│   ├── README.md                 # Documentation portal & index
+│   ├── API_REFERENCE.md          # 129 Tauri IPC command reference
+│   ├── ENTERPRISE_GA_SIGNING.md  # Production signing & updater runbook
+│   ├── V1_VS_V2_COMPARISON.md    # Architecture & security evolution report
+│   └── adr/                      # Architectural Decision Records
+├── CONTRIBUTING.md               # Contribution standards and PR guidelines
 ├── ARCHITECTURE.md               # Deep architectural documentation
+├── CHANGELOG.md                  # Semantic release history
+├── SECURITY.md                   # Security policy & disclosure process
 └── package.json
 ```
 
@@ -281,6 +301,7 @@ CodexOS/
 - 🔐 **Isolated AI Keys**: `MISTRAL_API_KEY` is stored exclusively in the ChaCha20-Poly1305 vault inside the Rust memory space and is never exposed to JavaScript.
 - 📦 **Sandboxed Extensions**: WASM plugins run strictly inside Wasmtime sandboxes with zero host permissions by default.
 - 🛡️ **Strict Content Security**: Hardened CSP prevents unauthorized remote scripts and untrusted network origins.
+- 🧱 **Enterprise SSRF Firewall**: Outbound proxy requests filter RFC-1918 private subnets, loopback, CGNAT, link-local/ULA, and cloud metadata endpoints.
 
 ---
 

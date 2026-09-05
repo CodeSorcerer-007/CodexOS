@@ -12,7 +12,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **Dedicated KV Engine (`kv.rs`)**: Extracted general-purpose SQLite key-value persistence from `proxy.rs` into its own decoupled architecture.
 - **Deterministic LRU Cache (`BoundedLruCache`)**: Zero-dependency bounded LRU cache with automatic eviction for AI root-cause diagnostics.
-- **Comprehensive API Documentation (`docs/API_REFERENCE.md`)**: Full specification of all 45+ Tauri IPC commands and security invariants.
+- **Comprehensive API Documentation (`docs/API_REFERENCE.md`)**: Full specification of all 129 Tauri IPC commands and security invariants.
 - **Frontend Test Suite Explosion**: Added 20+ new Vitest test files covering all previously untested components (`Breadcrumb`, `ToastContainer`, `KeyboardHelp`, `OnboardingWizard`, `LocalAI`, `LocalCodeEditor`, `ProcessManager`, `EnvManager`, `SshManager`, `PortTunnel`, `GPUCluster`, `MemoryProfiler`, `AutomationStudio`, `PluginManager`, `PluginMarketplace`, `SandboxManager`, `ASTRefactor`, `CollaborativeEditor`, `HttpRequestBuilder`, `DevDocsViewer`, `GitContextMenu`).
 - **CI Hardening**: Integrated `cargo deny` license, advisory, and ban validation directly into main branch pull request validation.
 
@@ -30,6 +30,8 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ---
 
 ## [2.0.0] — 2026-07-01
+
+> For an in-depth architectural, cryptographic, and performance report comparing the v1 prototype to the v2 platform, see **[docs/V1_VS_V2_COMPARISON.md](docs/V1_VS_V2_COMPARISON.md)**.
 
 ### Added
 - **AI Root-Cause Copilot** — automatically diagnoses terminal errors (non-zero exit), memory spikes, and HTTP 4xx/5xx failures via Mistral AI (`mistral-large-latest`)
@@ -81,6 +83,7 @@ Initial public release.
 - Sandbox / Nano-VMs (Wasmtime), Plugin Manager, Plugin Marketplace
 - Automation Studio (ReactFlow), DevDocs Viewer
 
-[Unreleased]: https://github.com/CodeSorcerer-007/CodexOS/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/CodeSorcerer-007/CodexOS/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/CodeSorcerer-007/CodexOS/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/CodeSorcerer-007/CodexOS/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/CodeSorcerer-007/CodexOS/releases/tag/v1.0.0
