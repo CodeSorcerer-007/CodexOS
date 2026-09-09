@@ -17,6 +17,10 @@
     "core:window:allow-hide",
     "core:window:allow-set-focus",
     "core:window:allow-unmaximize",
-    "core:window:allow-destroy"
+    "core:window:allow-destroy",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "updater:default"
   ]
 }

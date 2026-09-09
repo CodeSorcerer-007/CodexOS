@@ -29,6 +29,7 @@ pub mod ports;
 pub mod ssh;
 pub mod system_tools;
 pub mod commands;
+pub mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -78,6 +79,13 @@ pub fn run() {
 
             if let Ok(app_dir) = app.path().app_data_dir() {
                 diagnostics::init_panic_hook(app_dir);
+            }
+
+            #[cfg(desktop)]
+            {
+                if let Err(e) = tray::create_tray(app.handle()) {
+                    log::warn!("Failed to create system tray: {}", e);
+                }
             }
 
             Ok(())

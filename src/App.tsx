@@ -20,11 +20,25 @@ import { CommandPalette } from './components/CommandPalette';
 
 
 
+import { Minus, Square, Copy, X } from 'lucide-react';
+
 function App() {
   const appWindow = useRef(getCurrentWindow()).current;
+  const [isMaximized, setIsMaximized] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(
     localStorage.getItem('codexos-onboarded') !== 'true'
   );
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    appWindow.isMaximized().then(setIsMaximized).catch(() => {});
+    appWindow.onResized(() => {
+      appWindow.isMaximized().then(setIsMaximized).catch(() => {});
+    }).then(u => { unlisten = u; }).catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, [appWindow]);
 
   useKeyboardShortcuts();
 
@@ -116,36 +130,47 @@ function App() {
       {/* Main Content Area - offset by sidebar width */}
       <main id="main-content" role="main" className="flex-1 h-full relative ml-16 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-app-glow via-app-bg to-app-bg">
         
-        {/* Native Title Bar with Standard Windows Control Order: Minimize, Maximize, Close */}
-        <div className="h-8 w-full absolute top-0 left-0 z-50 flex items-center select-none pointer-events-none">
-          {/* Dedicated draggable header strip */}
-          <div data-tauri-drag-region className="flex-1 h-full pointer-events-auto" />
+        {/* Native Windows Title Bar with Drag Region & Windows 11 Controls */}
+        <div className="h-8 w-full absolute top-0 left-0 z-50 flex items-center justify-between select-none bg-black/30 border-b border-white/5">
+          {/* Draggable header strip with subtle branding and double-click to maximize */}
+          <div
+            data-tauri-drag-region
+            onDoubleClick={handleToggleMaximize}
+            className="flex-1 h-full flex items-center px-4 gap-2 cursor-default"
+          >
+            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase">CodexOS</span>
+            {currentPath && (
+              <span className="text-[11px] text-gray-600 font-mono truncate max-w-md">
+                — {currentPath}
+              </span>
+            )}
+          </div>
           
-          {/* Action buttons (explicit non-drag with click handlers) */}
-          <div className="flex items-center gap-1.5 px-4 pointer-events-auto z-50">
+          {/* Windows 11 Standard Window Controls (Minimize, Maximize/Restore, Close) */}
+          <div className="flex items-center h-full">
             <button
               onClick={handleMinimize}
               aria-label="Minimize window"
               title="Minimize"
-              className="group p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center"
+              className="h-8 w-11 flex items-center justify-center hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
             >
-              <span className="w-3 h-3 rounded-full bg-yellow-500 group-hover:bg-yellow-400 shadow-[0_0_6px_rgba(234,179,8,0.5)] block transition-transform group-active:scale-90" />
+              <Minus className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={handleToggleMaximize}
               aria-label="Maximize window"
-              title="Maximize / Restore"
-              className="group p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center"
+              title={isMaximized ? "Restore" : "Maximize"}
+              className="h-8 w-11 flex items-center justify-center hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
             >
-              <span className="w-3 h-3 rounded-full bg-green-500 group-hover:bg-green-400 shadow-[0_0_6px_rgba(34,197,94,0.5)] block transition-transform group-active:scale-90" />
+              {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
             </button>
             <button
               onClick={handleClose}
               aria-label="Close window"
               title="Close"
-              className="group p-1.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer flex items-center justify-center"
+              className="h-8 w-11 flex items-center justify-center hover:bg-[#e81123] hover:text-white text-gray-400 transition-colors cursor-pointer"
             >
-              <span className="w-3 h-3 rounded-full bg-red-500 group-hover:bg-red-400 shadow-[0_0_6px_rgba(239,68,68,0.5)] block transition-transform group-active:scale-90" />
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

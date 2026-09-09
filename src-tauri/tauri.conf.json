@@ -26,7 +26,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' asset: https://asset.localhost data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost http://localhost:11434 https://api.mistral.ai wss://signaling.yjs.dev wss://y-webrtc-signaling-eu.herokuapp.com; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' asset: https://asset.localhost data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost http://localhost:11434 https://api.mistral.ai wss://signaling.yjs.dev wss://y-webrtc-signaling-eu.herokuapp.com; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self';",
+      "capabilities": ["default"]
     }
   },
   "bundle": {
@@ -40,6 +41,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": null,
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false
+      }
+    },
     "android": {
       "debugApplicationIdSuffix": ".debug"
     }

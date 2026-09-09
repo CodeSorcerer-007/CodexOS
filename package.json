@@ -10,6 +10,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint .",
+    "typecheck": "tsc -b",
+    "check": "npm run lint && npm run typecheck && npm run test",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
