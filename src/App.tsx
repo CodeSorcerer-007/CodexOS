@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useStore, hydrateStore } from './store/store';
-import { kvSet } from './ipc';
+import { kvSet, getApiVersion, addAllowedPath } from './ipc';
 import { ToastContainer } from './components/ToastContainer';
 import { Sidebar } from './components/layout/Sidebar';
 import { AppRouter } from './components/layout/AppRouter';
@@ -97,19 +97,17 @@ function App() {
 
   useEffect(() => {
     // Verify API version compatibility and register allowed path
-    import('./ipc').then(({ getApiVersion, addAllowedPath }) => {
-      getApiVersion()
-        .then((version) => {
-          if (!version.startsWith('2.')) {
-            console.warn(`[CodexOS] Backend version mismatch: expected 2.x, got ${version}`);
-          }
-        })
-        .catch(() => {});
+    getApiVersion()
+      .then((version) => {
+        if (!version.startsWith('2.')) {
+          console.warn(`[CodexOS] Backend version mismatch: expected 2.x, got ${version}`);
+        }
+      })
+      .catch(() => {});
 
-      if (currentPath) {
-        addAllowedPath(currentPath).catch(() => {});
-      }
-    });
+    if (currentPath) {
+      addAllowedPath(currentPath).catch(() => {});
+    }
   }, [currentPath]);
 
   const handleOnboardingComplete = useCallback(() => {
