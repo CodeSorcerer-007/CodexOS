@@ -11,6 +11,8 @@ import { ToastContainer } from './components/ToastContainer';
 import { Sidebar } from './components/layout/Sidebar';
 import { AppRouter } from './components/layout/AppRouter';
 
+import { DeveloperStatusBar } from './components/layout/DeveloperStatusBar';
+
 import { TabBar } from './components/TabBar';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { KeyboardHelp } from './components/KeyboardHelp';
@@ -18,9 +20,7 @@ import { OnboardingWizard } from './components/OnboardingWizard';
 import { VaultUnlock } from './components/VaultUnlock';
 import { CommandPalette } from './components/CommandPalette';
 
-
-
-import { Minus, Square, Copy, X } from 'lucide-react';
+import { Minus, Square, Copy, X, Search, Sun, Moon, HelpCircle, FolderGit2, GitBranch } from 'lucide-react';
 
 function App() {
   const appWindow = useRef(getCurrentWindow()).current;
@@ -44,6 +44,8 @@ function App() {
 
   const activeApp = useStore(state => state.activeApp);
   const theme = useStore(state => state.settings.theme);
+  const updateSettings = useStore(state => state.updateSettings);
+  const setShowKeyboardHelp = useStore(state => state.setShowKeyboardHelp);
   const currentPath = useStore(state => state.currentPath);
   // Read addToast directly from the store for a stable reference that never
   // changes between renders, avoiding spurious effect re-runs.
@@ -140,23 +142,65 @@ function App() {
       <main id="main-content" role="main" className="flex-1 h-full relative ml-16 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-app-glow via-app-bg to-app-bg">
         
         {/* Native Windows Title Bar with Drag Region & Windows 11 Controls */}
-        <div className="h-8 w-full absolute top-0 left-0 z-50 flex items-center justify-between select-none bg-app-surface/60 backdrop-blur-md border-b border-app-border">
+        <div className="h-8 w-full absolute top-0 left-0 z-50 flex items-center justify-between select-none bg-app-surface/60 backdrop-blur-md border-b border-app-border px-1">
           {/* Draggable header strip with subtle branding and double-click to maximize */}
           <div
             data-tauri-drag-region
             onDoubleClick={handleToggleMaximize}
-            className="flex-1 h-full flex items-center px-4 gap-2 cursor-default"
+            className="flex-1 h-full flex items-center px-3 gap-2 cursor-default overflow-hidden"
           >
-            <span className="text-[11px] font-bold text-app-text-muted tracking-wider uppercase">CodexOS</span>
+            <span className="text-[11px] font-bold text-app-text-muted tracking-wider uppercase shrink-0">CodexOS</span>
+            <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/15 text-indigo-400 font-mono font-semibold border border-indigo-500/20 shrink-0">
+              v2.2.0
+            </span>
             {currentPath && (
-              <span className="text-[11px] text-app-text-muted/80 font-mono truncate max-w-md">
-                — {currentPath}
+              <span className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded bg-black/10 dark:bg-white/5 border border-app-border text-[10px] text-app-text-muted font-mono truncate max-w-xs">
+                <FolderGit2 className="w-3 h-3 text-indigo-400 shrink-0" />
+                <span className="truncate">{currentPath.split(/[/\\]/).filter(Boolean).pop() || currentPath}</span>
               </span>
             )}
+            <span className="hidden xl:flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/5 border border-app-border text-[10px] text-emerald-400 font-mono shrink-0">
+              <GitBranch className="w-2.5 h-2.5" />
+              <span>MZ-branch</span>
+            </span>
+          </div>
+
+          {/* Centered Command Palette Search Bar Pill */}
+          <div
+            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))}
+            className="h-6 px-3 rounded-md bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10 border border-app-border hover:border-indigo-500/40 text-app-text-muted hover:text-app-text flex items-center justify-between gap-3 text-[11px] cursor-pointer transition-all w-56 sm:w-64 md:w-80 shrink-0 mx-2"
+            title="Search commands, files, and modules (Ctrl+K)"
+          >
+            <div className="flex items-center gap-1.5 truncate">
+              <Search className="w-3 h-3 text-app-text-muted shrink-0" />
+              <span className="truncate">Search commands & tools...</span>
+            </div>
+            <kbd className="hidden sm:inline-flex items-center text-[9px] font-mono bg-black/20 dark:bg-white/10 px-1 rounded border border-app-border text-app-text-muted">
+              Ctrl+K
+            </kbd>
           </div>
           
-          {/* Windows 11 Standard Window Controls (Minimize, Maximize/Restore, Close) */}
-          <div className="flex items-center h-full">
+          {/* Windows 11 Standard Window Controls + Quick Tools */}
+          <div className="flex items-center h-full gap-0.5">
+            <button
+              onClick={() => updateSettings({ theme: theme === 'light' ? 'dark' : 'light' })}
+              aria-label="Toggle theme"
+              title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+              className="h-7 w-7 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 text-app-text-muted hover:text-app-text rounded transition-colors cursor-pointer"
+            >
+              {theme === 'light' ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              onClick={() => setShowKeyboardHelp(true)}
+              aria-label="Keyboard Shortcuts"
+              title="Keyboard Shortcuts (Ctrl+?)"
+              className="h-7 w-7 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 text-app-text-muted hover:text-app-text rounded transition-colors cursor-pointer"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="h-4 w-px bg-app-border mx-1" />
+
             <button
               onClick={handleMinimize}
               aria-label="Minimize window"
@@ -195,7 +239,7 @@ function App() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.99 }}
             transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="w-full h-full absolute inset-0 pt-[68px]"
+            className="w-full h-full absolute inset-0 pt-[68px] pb-6"
           >
             <ErrorBoundary>
               <Suspense fallback={
@@ -209,6 +253,8 @@ function App() {
             </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
+
+        <DeveloperStatusBar />
       </main>
       <KeyboardHelp />
       <VaultUnlock />
