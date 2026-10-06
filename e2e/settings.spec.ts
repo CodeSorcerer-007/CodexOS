@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures/tauriMock';
 
 test.describe('Settings & Configuration Flow', () => {
   test.beforeEach(async ({ page }) => {

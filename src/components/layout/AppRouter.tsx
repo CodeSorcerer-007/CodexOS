@@ -1,3 +1,4 @@
+/* oxlint-disable react/only-export-components */
 import React, { lazy } from 'react';
 import { useStore } from '../../store/store';
 import type { AppId } from '../../types/apps';
@@ -30,7 +31,7 @@ const PortTunnel = lazy(() => import('../PortTunnel').then(m => ({ default: m.Po
 const SettingsPage = lazy(() => import('../SettingsPage').then(m => ({ default: m.SettingsPage })));
 const GridlineDashboard = lazy(() => import('../../gridline-dashboard/demo'));
 
-const ROUTE_REGISTRY: Partial<Record<AppId, React.ComponentType<any>>> = {
+export const ROUTE_REGISTRY: Partial<Record<AppId, React.ComponentType<any>>> = {
   home: CodexOSDashboard,
   gridline: GridlineDashboard,
   files: FileGrid,
@@ -52,6 +53,7 @@ const ROUTE_REGISTRY: Partial<Record<AppId, React.ComponentType<any>>> = {
   memory: MemoryProfiler,
   market: PluginMarketplace,
   ast: ASTRefactor,
+  zkp: HMACVault,
   hmac: HMACVault,
   gpu: GPUCluster,
   crdt: CollaborativeEditor,
@@ -98,6 +100,10 @@ export const AppRouter: React.FC = () => {
 
   // Handle specific props mapping based on activeApp
   const getProps = () => {
+    if (Component === CodexOSDashboard) {
+      return { onOpenApp: setActiveApp };
+    }
+
     switch (activeApp) {
       case 'files':
         return {
@@ -110,8 +116,6 @@ export const AppRouter: React.FC = () => {
             setActiveApp('editor');
           }
         };
-      case 'home':
-        return { onOpenApp: setActiveApp };
       case 'git':
       case 'plugins':
       case 'sandbox':

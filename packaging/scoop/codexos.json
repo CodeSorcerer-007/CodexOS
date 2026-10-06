@@ -1,0 +1,28 @@
+{
+  "version": "2.2.0",
+  "description": "Privacy-first offline developer desktop operating environment and native control center",
+  "homepage": "https://github.com/CodeSorcerer-007/CodexOS",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/CodeSorcerer-007/CodexOS/releases/download/v2.2.0/CodexOS_2.2.0_x64-setup.exe#/dl.7z",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "shortcuts": [
+    [
+      "CodexOS.exe",
+      "CodexOS"
+    ]
+  ],
+  "checkver": {
+    "github": "https://github.com/CodeSorcerer-007/CodexOS"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/CodeSorcerer-007/CodexOS/releases/download/v$version/CodexOS_$version_x64-setup.exe#/dl.7z"
+      }
+    }
+  }
+}

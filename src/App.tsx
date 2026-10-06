@@ -49,6 +49,17 @@ function App() {
   // changes between renders, avoiding spurious effect re-runs.
   const addToast = useStore(state => state.addToast);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.remove('dark');
+      root.classList.add('light', 'light-theme');
+    } else {
+      root.classList.remove('light', 'light-theme');
+      root.classList.add('dark');
+    }
+  }, [theme]);
+
   const handleMinimize = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -119,7 +130,7 @@ function App() {
   }, []);
 
   return (
-    <div className={`flex h-screen w-screen bg-app-bg text-white font-sans overflow-hidden selection:bg-indigo-500/30 ${theme === 'light' ? 'light-theme' : ''}`}>
+    <div className={`flex h-screen w-screen bg-app-bg text-app-text font-sans overflow-hidden selection:bg-indigo-500/30 ${theme === 'light' ? 'light-theme light' : 'dark'}`}>
       
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:p-4 focus:bg-indigo-600 focus:text-white">Skip to content</a>
       {/* Modern Floating Sidebar Component */}
@@ -129,16 +140,16 @@ function App() {
       <main id="main-content" role="main" className="flex-1 h-full relative ml-16 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-app-glow via-app-bg to-app-bg">
         
         {/* Native Windows Title Bar with Drag Region & Windows 11 Controls */}
-        <div className="h-8 w-full absolute top-0 left-0 z-50 flex items-center justify-between select-none bg-black/30 border-b border-white/5">
+        <div className="h-8 w-full absolute top-0 left-0 z-50 flex items-center justify-between select-none bg-app-surface/60 backdrop-blur-md border-b border-app-border">
           {/* Draggable header strip with subtle branding and double-click to maximize */}
           <div
             data-tauri-drag-region
             onDoubleClick={handleToggleMaximize}
             className="flex-1 h-full flex items-center px-4 gap-2 cursor-default"
           >
-            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase">CodexOS</span>
+            <span className="text-[11px] font-bold text-app-text-muted tracking-wider uppercase">CodexOS</span>
             {currentPath && (
-              <span className="text-[11px] text-gray-600 font-mono truncate max-w-md">
+              <span className="text-[11px] text-app-text-muted/80 font-mono truncate max-w-md">
                 — {currentPath}
               </span>
             )}
@@ -150,7 +161,7 @@ function App() {
               onClick={handleMinimize}
               aria-label="Minimize window"
               title="Minimize"
-              className="h-8 w-11 flex items-center justify-center hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              className="h-8 w-11 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 text-app-text-muted hover:text-app-text transition-colors cursor-pointer"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
@@ -158,7 +169,7 @@ function App() {
               onClick={handleToggleMaximize}
               aria-label="Maximize window"
               title={isMaximized ? "Restore" : "Maximize"}
-              className="h-8 w-11 flex items-center justify-center hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+              className="h-8 w-11 flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/10 text-app-text-muted hover:text-app-text transition-colors cursor-pointer"
             >
               {isMaximized ? <Copy className="w-3 h-3 rotate-180" /> : <Square className="w-3 h-3" />}
             </button>
@@ -166,7 +177,7 @@ function App() {
               onClick={handleClose}
               aria-label="Close window"
               title="Close"
-              className="h-8 w-11 flex items-center justify-center hover:bg-[#e81123] hover:text-white text-gray-400 transition-colors cursor-pointer"
+              className="h-8 w-11 flex items-center justify-center hover:bg-[#e81123] hover:text-white text-app-text-muted transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>

@@ -27,7 +27,7 @@ vi.mock('y-webrtc', () => {
         if (event === 'synced') cb({ synced: true });
       }
       destroy() {}
-    }
+    },
   };
 });
 
@@ -35,13 +35,14 @@ vi.mock('y-monaco', () => {
   return {
     MonacoBinding: class {
       destroy() {}
-    }
+    },
   };
 });
 
 describe('CollaborativeEditor component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   test('renders P2P CRDT editor interface', () => {
@@ -55,5 +56,23 @@ describe('CollaborativeEditor component', () => {
     const roomInput = screen.getByDisplayValue(/codexos-/i);
     fireEvent.change(roomInput, { target: { value: 'team-room-123' } });
     expect(screen.getByDisplayValue('team-room-123')).toBeInTheDocument();
+  });
+
+  test('opens WebRTC STUN/TURN traversal modal and updates ICE server config', () => {
+    render(<CollaborativeEditor currentPath="/test/workspace/index.ts" />);
+    const traversalBtn = screen.getByRole('button', { name: /traversal/i });
+    fireEvent.click(traversalBtn);
+
+    expect(screen.getByText(/WebRTC ICE Traversal \(STUN\/TURN\)/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('stun:stun.l.google.com:19302')).toBeInTheDocument();
+
+    const turnInput = screen.getByPlaceholderText('turn:turn.example.com:3478');
+    fireEvent.change(turnInput, { target: { value: 'turn:custom.turn.server:3478' } });
+
+    const saveBtn = screen.getByRole('button', { name: /save & reconnect/i });
+    fireEvent.click(saveBtn);
+
+    const saved = JSON.parse(localStorage.getItem('codexos_webrtc_traversal') || '{}');
+    expect(saved.turnUrl).toBe('turn:custom.turn.server:3478');
   });
 });

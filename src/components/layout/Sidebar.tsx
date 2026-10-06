@@ -29,16 +29,16 @@ export const Sidebar: React.FC = () => {
       aria-label="Main navigation"
       className={`${
         pinned ? 'w-64' : 'w-16 hover:w-64'
-      } transition-all duration-300 ease-in-out bg-black/60 backdrop-blur-xl border-r border-white/5 flex flex-col items-center hover:items-start group z-50 absolute h-full top-0 left-0 hover:shadow-2xl hover:shadow-black/50`}
+      } transition-all duration-300 ease-in-out bg-app-surface/90 backdrop-blur-xl border-r border-app-border flex flex-col items-center hover:items-start group z-50 absolute h-full top-0 left-0 hover:shadow-2xl hover:shadow-black/20`}
     >
       {/* Logo Area */}
-      <div className="h-16 w-full flex items-center justify-between px-4 mb-4 border-b border-white/5">
+      <div className="h-16 w-full flex items-center justify-between px-4 mb-4 border-b border-app-border">
         <div className="flex items-center">
           <img src="/logo.png" alt="CodexOS" className="w-8 h-8 shrink-0 object-contain rounded-lg shadow-sm" />
           <motion.span
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className={`ml-3 font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-gray-100 to-gray-500 whitespace-nowrap ${
+            className={`ml-3 font-black tracking-widest uppercase text-transparent bg-clip-text bg-gradient-to-r from-gray-900 to-gray-600 dark:from-gray-100 dark:to-gray-500 whitespace-nowrap ${
               pinned ? 'block' : 'hidden group-hover:block'
             }`}
           >
@@ -48,7 +48,7 @@ export const Sidebar: React.FC = () => {
         <button
           onClick={() => setPinned(!pinned)}
           title={pinned ? 'Unpin sidebar' : 'Pin sidebar'}
-          className={`text-gray-500 hover:text-white transition-colors ${
+          className={`text-app-text-muted hover:text-app-text transition-colors ${
             pinned ? 'block' : 'hidden group-hover:block'
           }`}
         >
@@ -70,8 +70,8 @@ export const Sidebar: React.FC = () => {
               aria-current={isActive ? 'page' : undefined}
               className={`w-full flex items-center h-12 rounded-xl transition-all duration-200 shrink-0 relative focus:outline-none focus:ring-2 focus:ring-indigo-500/50 ${
                 isActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
+                  ? 'bg-indigo-500/15 text-indigo-500 dark:text-white font-semibold'
+                  : 'text-app-text-muted hover:bg-black/5 dark:hover:bg-white/5 hover:text-app-text'
               }`}
             >
               {isActive && (
@@ -97,15 +97,15 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Settings at Bottom */}
-      <div className="mt-auto w-full p-2 group-hover:p-4 border-t border-white/5 bg-black/40">
+      <div className="mt-auto w-full p-2 group-hover:p-4 border-t border-app-border bg-app-surface/60">
         <button
           onClick={() => setActiveApp('settings')}
           aria-label="Settings"
           aria-current={activeApp === 'settings' ? 'page' : undefined}
           className={`w-full flex items-center h-12 rounded-xl transition-all duration-200 relative focus:outline-none focus:ring-2 focus:ring-indigo-500/50 ${
             activeApp === 'settings'
-              ? 'bg-white/10 text-white'
-              : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'
+              ? 'bg-indigo-500/15 text-indigo-500 dark:text-white font-semibold'
+              : 'text-app-text-muted hover:bg-black/5 dark:hover:bg-white/5 hover:text-app-text'
           }`}
         >
           {activeApp === 'settings' && (

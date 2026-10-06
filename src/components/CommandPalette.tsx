@@ -109,11 +109,11 @@ export const CommandPalette = () => {
             initial={{ scale: 0.95, y: -20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.95, y: -20 }}
-            className="w-full max-w-2xl bg-[#0a0f18] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+            className="w-full max-w-2xl bg-app-surface border border-app-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center px-4 py-4 border-b border-white/10">
-              <Search className="w-6 h-6 text-gray-400 mr-3" />
+            <div className="flex items-center px-4 py-4 border-b border-app-border">
+              <Search className="w-6 h-6 text-app-text-muted mr-3" />
               <input
                 type="text"
                 autoFocus
@@ -124,17 +124,17 @@ export const CommandPalette = () => {
                 aria-autocomplete="list"
                 aria-controls="command-palette-results"
                 aria-activedescendant={filteredItems[selectedIndex] ? `cp-item-${filteredItems[selectedIndex].id}` : undefined}
-                className="flex-1 bg-transparent text-white text-lg focus:outline-none placeholder:text-gray-500"
+                className="flex-1 bg-transparent text-app-text text-lg focus:outline-none placeholder:text-app-text-muted"
               />
-              <div className="flex items-center gap-1 text-xs text-gray-500">
-                <kbd className="px-2 py-1 bg-white/5 rounded border border-white/10 font-mono">ESC</kbd>
+              <div className="flex items-center gap-1 text-xs text-app-text-muted">
+                <kbd className="px-2 py-1 bg-black/5 dark:bg-white/5 rounded border border-app-border font-mono">ESC</kbd>
                 <span>to close</span>
               </div>
             </div>
 
             <div id="command-palette-results" className="max-h-[60vh] overflow-y-auto p-2" role="listbox" aria-label="Command palette results">
               {filteredItems.length === 0 ? (
-                <div className="p-8 text-center text-gray-500" role="status">No results found for "{search}"</div>
+                <div className="p-8 text-center text-app-text-muted" role="status">No results found for "{search}"</div>
               ) : (
                 filteredItems.map((item, idx) => (
                   <div
@@ -145,14 +145,14 @@ export const CommandPalette = () => {
                     onMouseEnter={() => setSelectedIndex(idx)}
                     onClick={() => item.action()}
                     className={`flex items-center px-4 py-3 rounded-xl cursor-pointer transition-colors ${
-                      idx === selectedIndex ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-300 hover:bg-white/5'
+                      idx === selectedIndex ? 'bg-indigo-500/15 text-indigo-500 dark:text-indigo-400 font-medium' : 'text-app-text hover:bg-black/5 dark:hover:bg-white/5'
                     }`}
                   >
-                    <div className="w-8 h-8 flex items-center justify-center bg-black/30 rounded-lg mr-4" aria-hidden="true">
+                    <div className="w-8 h-8 flex items-center justify-center bg-black/5 dark:bg-black/30 border border-app-border rounded-lg mr-4" aria-hidden="true">
                       {item.icon}
                     </div>
                     <span className="flex-1 font-medium">{item.label}</span>
-                    {idx === selectedIndex && <ArrowRight className="w-5 h-5 text-indigo-400" aria-hidden="true" />}
+                    {idx === selectedIndex && <ArrowRight className="w-5 h-5 text-indigo-500 dark:text-indigo-400" aria-hidden="true" />}
                   </div>
                 ))
               )}

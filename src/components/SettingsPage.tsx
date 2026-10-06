@@ -251,7 +251,7 @@ export const SettingsPage = () => {
               className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm focus:border-indigo-500 outline-none"
             >
               <option value="dark">Dark</option>
-              <option value="light">Light (Experimental)</option>
+              <option value="light">Light</option>
             </select>
           </div>
         </div>

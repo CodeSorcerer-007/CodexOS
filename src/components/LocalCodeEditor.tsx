@@ -20,6 +20,7 @@ export const LocalCodeEditor = () => {
   const closeFile = useStore(s => s.closeFile);
   const setSelectedFile = useStore(s => s.setSelectedFile);
   const shell = useStore(s => s.settings.terminalShell);
+  const theme = useStore(s => s.settings.theme);
   const { success: toastSuccess, error: toastError } = useToast();
   
   const [content, setContent] = useState('');
@@ -206,7 +207,7 @@ export const LocalCodeEditor = () => {
             <Editor
               height="100%"
               language={language}
-              theme="vs-dark"
+              theme={theme === 'light' ? 'light' : 'vs-dark'}
               value={content}
               onChange={(val) => setContent(val || '')}
               options={{

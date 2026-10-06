@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { useToast } from '../store/store';
+import { useStore, useToast } from '../store/store';
 
 import type { DockerContainer } from '../types/bindings/DockerContainer';
 import type { DockerImage } from '../types/bindings/DockerImage';
@@ -17,6 +17,7 @@ import { DockerContainerDetail } from './docker/DockerContainerDetail';
 import { DockerImageList } from './docker/DockerImageList';
 
 export const DockerDashboard = memo(() => {
+  const theme = useStore(s => s.settings.theme);
   const [activeTab, setActiveTab] = useState<'containers' | 'images'>('containers');
   const [containers, setContainers] = useState<DockerContainer[]>([]);
   const [images, setImages] = useState<DockerImage[]>([]);
@@ -160,10 +161,26 @@ export const DockerDashboard = memo(() => {
     }
   }, [selectedContainer, isStreaming]);
 
+  const getTerminalTheme = (isLight: boolean) => isLight ? {
+    background: '#ffffff',
+    foreground: '#0f172a',
+    cursor: '#0284c7',
+  } : {
+    background: '#000000',
+    foreground: '#e2e8f0',
+  };
+
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = getTerminalTheme(theme === 'light');
+    }
+  }, [theme]);
+
   useEffect(() => {
     if (!terminalContainerRef.current) return;
+    const isInitialLight = useStore.getState().settings.theme === 'light';
     const term = new Terminal({
-      theme: { background: '#000000', foreground: '#e2e8f0' },
+      theme: getTerminalTheme(isInitialLight),
       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
       fontSize: 13,
       convertEol: true,
@@ -180,8 +197,9 @@ export const DockerDashboard = memo(() => {
     return () => {
       window.removeEventListener('resize', handleResize);
       term.dispose();
+      termRef.current = null;
     };
-  }, []);
+  }, [selectedContainer]);
 
   const handlePullImage = async () => {
     if (!pullImageName) return;

@@ -45,27 +45,27 @@ export const KeyboardHelp = () => {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-black border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col"
+          className="bg-app-surface border border-app-border rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col"
           onClick={e => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
-            <h2 id="keyboard-help-title" className="text-lg font-bold flex items-center gap-2">
+          <div className="flex items-center justify-between p-4 border-b border-app-border bg-app-surface-muted/50">
+            <h2 id="keyboard-help-title" className="text-lg font-bold flex items-center gap-2 text-app-text">
               <Keyboard className="text-indigo-400" size={20} aria-hidden="true" />
               Keyboard Shortcuts
             </h2>
             <button
               onClick={() => setIsOpen(false)}
               aria-label="Close keyboard shortcuts"
-              className="p-1 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
+              className="p-1 hover:bg-app-surface-muted rounded-lg transition-colors text-app-text-muted hover:text-app-text"
             >
               <X size={20} aria-hidden="true" />
             </button>
           </div>
 
-          <div className="p-4 flex flex-col gap-2 bg-black/40">
+          <div className="p-4 flex flex-col gap-2 bg-app-surface">
             {shortcuts.map((s) => (
-              <div key={s.keys} className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-white/5 transition-colors">
-                <span className="text-gray-300 font-medium">{s.action}</span>
+              <div key={s.keys} className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-app-surface-muted transition-colors">
+                <span className="text-app-text font-medium">{s.action}</span>
                 <kbd className="text-indigo-400 font-mono text-sm bg-indigo-500/10 px-2 py-1 rounded-md border border-indigo-500/20">
                   {s.keys}
                 </kbd>
@@ -73,7 +73,7 @@ export const KeyboardHelp = () => {
             ))}
           </div>
           
-          <div className="p-4 bg-white/5 border-t border-white/10 text-xs text-center text-gray-500">
+          <div className="p-4 bg-app-surface-muted/50 border-t border-app-border text-xs text-center text-app-text-muted">
             Press Esc or click outside to close
           </div>
         </motion.div>
