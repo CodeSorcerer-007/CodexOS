@@ -5,9 +5,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
     ChaCha20Poly1305, Key, Nonce,
 };
-use criterion::{
-    black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput,
-};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 
 /// Benchmark 1: Argon2id password key derivation latency
 /// using production parameters from vault.rs (t_cost=3, m_cost=65536, p_cost=4).
@@ -46,10 +44,10 @@ fn bench_chacha20poly1305_throughput(c: &mut Criterion) {
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let buffer_sizes: [usize; 4] = [
-        64,              // 64B
-        1024,            // 1KB
-        64 * 1024,       // 64KB
-        1024 * 1024,     // 1MB
+        64,          // 64B
+        1024,        // 1KB
+        64 * 1024,   // 64KB
+        1024 * 1024, // 1MB
     ];
 
     // Encryption throughput group
@@ -66,18 +64,14 @@ fn bench_chacha20poly1305_throughput(c: &mut Criterion) {
             };
 
             enc_group.throughput(Throughput::Bytes(size as u64));
-            enc_group.bench_with_input(
-                BenchmarkId::new("encrypt", &label),
-                &plaintext,
-                |b, pt| {
-                    b.iter(|| {
-                        let ct = cipher
-                            .encrypt(black_box(nonce), black_box(pt.as_slice()))
-                            .expect("ChaCha20Poly1305 encryption failed");
-                        black_box(ct);
-                    });
-                },
-            );
+            enc_group.bench_with_input(BenchmarkId::new("encrypt", &label), &plaintext, |b, pt| {
+                b.iter(|| {
+                    let ct = cipher
+                        .encrypt(black_box(nonce), black_box(pt.as_slice()))
+                        .expect("ChaCha20Poly1305 encryption failed");
+                    black_box(ct);
+                });
+            });
         }
         enc_group.finish();
     }

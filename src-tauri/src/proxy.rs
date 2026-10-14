@@ -47,6 +47,12 @@ pub struct ProxyState {
     pub db: Arc<Mutex<Option<Connection>>>,
 }
 
+impl Default for ProxyState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProxyState {
     pub fn new() -> Self {
         ProxyState {
@@ -88,7 +94,13 @@ fn is_ipv6_blocked(v6: std::net::Ipv6Addr) -> bool {
         return is_ipv4_blocked(v4);
     }
     // IPv4-compatible IPv6 ::x.x.x.x
-    if segments[0] == 0 && segments[1] == 0 && segments[2] == 0 && segments[3] == 0 && segments[4] == 0 && segments[5] == 0 {
+    if segments[0] == 0
+        && segments[1] == 0
+        && segments[2] == 0
+        && segments[3] == 0
+        && segments[4] == 0
+        && segments[5] == 0
+    {
         let v4 = std::net::Ipv4Addr::new(
             (segments[6] >> 8) as u8,
             (segments[6] & 0xff) as u8,
@@ -103,7 +115,12 @@ fn is_ipv6_blocked(v6: std::net::Ipv6Addr) -> bool {
 pub fn is_ssrf_blocked(host: &str, allowed_hosts: &[String]) -> bool {
     let trimmed = host.trim().to_lowercase();
     let clean_host = if trimmed.starts_with('[') {
-        trimmed.split(']').next().unwrap_or(&trimmed).trim_start_matches('[').to_string()
+        trimmed
+            .split(']')
+            .next()
+            .unwrap_or(&trimmed)
+            .trim_start_matches('[')
+            .to_string()
     } else if trimmed.contains(':') && trimmed.matches(':').count() == 1 {
         trimmed.split(':').next().unwrap_or(&trimmed).to_string()
     } else {
@@ -112,7 +129,11 @@ pub fn is_ssrf_blocked(host: &str, allowed_hosts: &[String]) -> bool {
 
     if allowed_hosts.iter().any(|h| {
         let clean_allowed = if h.starts_with('[') {
-            h.split(']').next().unwrap_or(h).trim_start_matches('[').to_lowercase()
+            h.split(']')
+                .next()
+                .unwrap_or(h)
+                .trim_start_matches('[')
+                .to_lowercase()
         } else if h.contains(':') && h.matches(':').count() == 1 {
             h.split(':').next().unwrap_or(h).to_lowercase()
         } else {
@@ -148,18 +169,32 @@ pub fn is_ssrf_blocked(host: &str, allowed_hosts: &[String]) -> bool {
 }
 
 #[tauri::command]
-pub fn set_proxy_whitelist(hosts: Vec<String>, state: tauri::State<'_, ProxyState>) -> Result<(), String> {
-    let mut lock = state.allowed_hosts.lock().map_err(|_| "Lock poisoned".to_string())?;
+pub fn set_proxy_whitelist(
+    hosts: Vec<String>,
+    state: tauri::State<'_, ProxyState>,
+) -> Result<(), String> {
+    let mut lock = state
+        .allowed_hosts
+        .lock()
+        .map_err(|_| "Lock poisoned".to_string())?;
     *lock = hosts;
     Ok(())
 }
 
 #[tauri::command]
 pub fn get_proxy_whitelist(state: tauri::State<'_, ProxyState>) -> Vec<String> {
-    state.allowed_hosts.lock().map(|l| l.clone()).unwrap_or_default()
+    state
+        .allowed_hosts
+        .lock()
+        .map(|l| l.clone())
+        .unwrap_or_default()
 }
 
-fn save_request(app_handle: &tauri::AppHandle, db_holder: &Arc<Mutex<Option<Connection>>>, req: &CapturedRequest) {
+fn save_request(
+    app_handle: &tauri::AppHandle,
+    db_holder: &Arc<Mutex<Option<Connection>>>,
+    req: &CapturedRequest,
+) {
     let mut guard = lock_poison_recover(db_holder);
 
     if guard.is_none() {
@@ -270,7 +305,10 @@ async fn handle_request(
         Err(e) => {
             return Ok(Response::builder()
                 .status(500)
-                .body(Body::from(format!("Failed to construct proxy request: {}", e)))
+                .body(Body::from(format!(
+                    "Failed to construct proxy request: {}",
+                    e
+                )))
                 .unwrap());
         }
     };
@@ -454,7 +492,10 @@ where
 }
 
 #[tauri::command]
-pub fn get_captured_requests(app_handle: tauri::AppHandle, state: tauri::State<'_, ProxyState>) -> Vec<CapturedRequest> {
+pub fn get_captured_requests(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, ProxyState>,
+) -> Vec<CapturedRequest> {
     with_proxy_db(&app_handle, &state, |conn| {
         let mut stmt = conn.prepare("SELECT id, method, url, request_headers, request_body, response_status, response_headers, response_body, timestamp, duration_ms FROM proxy_logs ORDER BY timestamp DESC LIMIT 100").ok()?;
         let iter = stmt.query_map([], |row| {
@@ -481,7 +522,10 @@ pub fn get_captured_requests(app_handle: tauri::AppHandle, state: tauri::State<'
 }
 
 #[tauri::command]
-pub fn clear_captured_requests(app_handle: tauri::AppHandle, state: tauri::State<'_, ProxyState>) -> Result<(), String> {
+pub fn clear_captured_requests(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, ProxyState>,
+) -> Result<(), String> {
     with_proxy_db(&app_handle, &state, |conn| {
         let _ = conn.execute("DELETE FROM proxy_logs", []);
         Some(())
@@ -497,7 +541,9 @@ pub async fn replay_request(
     body: Option<String>,
     state: tauri::State<'_, ProxyState>,
 ) -> Result<CapturedRequest, String> {
-    let parsed_url: hyper::Uri = url.parse().map_err(|e: hyper::http::uri::InvalidUri| e.to_string())?;
+    let parsed_url: hyper::Uri = url
+        .parse()
+        .map_err(|e: hyper::http::uri::InvalidUri| e.to_string())?;
     let host = parsed_url.host().unwrap_or("").to_string();
     let whitelist = lock_poison_recover(&state.allowed_hosts).clone();
 
@@ -506,7 +552,10 @@ pub async fn replay_request(
     }
 
     let start_time = SystemTime::now();
-    let timestamp = start_time.duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+    let timestamp = start_time
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
 
     let https = HttpsConnector::new();
     let client = Client::builder().build::<_, hyper::Body>(https);

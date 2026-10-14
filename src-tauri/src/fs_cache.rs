@@ -9,6 +9,12 @@ pub struct FsWatcherState {
     pub watchers: Mutex<HashMap<String, RecommendedWatcher>>,
 }
 
+impl Default for FsWatcherState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FsWatcherState {
     pub fn new() -> Self {
         Self {
@@ -45,9 +51,9 @@ pub fn watch_directory(
     }
 
     let path_clone = path.to_string();
-    
+
     let (tx, rx) = std::sync::mpsc::channel();
-    
+
     let mut watcher = notify::RecommendedWatcher::new(
         tx,
         Config::default().with_poll_interval(std::time::Duration::from_secs(2)),
@@ -64,7 +70,10 @@ pub fn watch_directory(
         for res in rx {
             match res {
                 Ok(event) => {
-                    if let notify::EventKind::Modify(_) | notify::EventKind::Create(_) | notify::EventKind::Remove(_) = event.kind {
+                    if let notify::EventKind::Modify(_)
+                    | notify::EventKind::Create(_)
+                    | notify::EventKind::Remove(_) = event.kind
+                    {
                         use tauri::Emitter;
                         let _ = app_handle.emit("fs-change", &path_clone);
                     }

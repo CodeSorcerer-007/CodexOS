@@ -2,9 +2,8 @@
 // Explicit module imports instead of `use crate::*` so name conflicts are
 // caught at compile time and each command's origin is traceable at a glance.
 use crate::{
-    ai, archive, crypto_tools, db, devdocs, diagnostics, docker, files, fs_cache,
-    git, hmac_vault, kv, multiplexer, plugin, ports, proxy,
-    secrets, ssh, sys, system_tools, tunnel, vault,
+    ai, archive, crypto_tools, db, devdocs, diagnostics, docker, files, fs_cache, git, hmac_vault,
+    kv, multiplexer, plugin, ports, proxy, secrets, ssh, sys, system_tools, tunnel, vault,
 };
 
 pub fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {

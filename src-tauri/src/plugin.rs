@@ -7,14 +7,10 @@ use wasmtime::*;
 // Embedded demo WASM module bytecode:
 // Exports memory and run() -> i32 (returns 42)
 const DEMO_CALC_WASM: &[u8] = &[
-    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
-    0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f,
-    0x03, 0x02, 0x01, 0x00,
-    0x05, 0x03, 0x01, 0x00, 0x01,
-    0x07, 0x11, 0x02,
-    0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
-    0x03, 0x72, 0x75, 0x6e, 0x00, 0x00,
-    0x0a, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2a, 0x0b,
+    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7f, 0x03,
+    0x02, 0x01, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x11, 0x02, 0x06, 0x6d, 0x65, 0x6d, 0x6f,
+    0x72, 0x79, 0x02, 0x00, 0x03, 0x72, 0x75, 0x6e, 0x00, 0x00, 0x0a, 0x06, 0x01, 0x04, 0x00, 0x41,
+    0x2a, 0x0b,
 ];
 
 #[derive(Default)]
@@ -39,14 +35,17 @@ pub struct NanoVmResult {
 pub fn run_wasm_plugin(path: String) -> AppResult<String> {
     let mut config = Config::new();
     config.consume_fuel(true);
-    let engine = Engine::new(&config).map_err(|e| format!("Failed to configure WASM engine: {}", e))?;
+    let engine =
+        Engine::new(&config).map_err(|e| format!("Failed to configure WASM engine: {}", e))?;
 
     let wasm_bytes = fs::read(&path).map_err(|e| format!("Failed to read WASM file: {}", e))?;
     let module =
         Module::new(&engine, &wasm_bytes).map_err(|e| format!("Failed to compile WASM: {}", e))?;
 
     let mut store = Store::new(&engine, ());
-    store.set_fuel(50_000_000).map_err(|e| format!("Failed to set WASM fuel: {}", e))?;
+    store
+        .set_fuel(50_000_000)
+        .map_err(|e| format!("Failed to set WASM fuel: {}", e))?;
 
     let linker = Linker::new(&engine);
     let instance = linker
@@ -92,25 +91,38 @@ pub fn run_wasi_nano_vm(
     // 3. Configure Wasmtime engine with compute fuel budget
     let mut config = Config::new();
     config.consume_fuel(true);
-    let engine = Engine::new(&config).map_err(|e| format!("Failed to configure WASM engine: {}", e))?;
+    let engine =
+        Engine::new(&config).map_err(|e| format!("Failed to configure WASM engine: {}", e))?;
 
-    let module = Module::new(&engine, &wasm_bytes).map_err(|e| format!("Failed to compile WASM: {}", e))?;
+    let module =
+        Module::new(&engine, &wasm_bytes).map_err(|e| format!("Failed to compile WASM: {}", e))?;
 
     let initial_fuel = 100_000_000u64;
     let mut store = Store::new(&engine, VmContext::default());
-    store.set_fuel(initial_fuel).map_err(|e| format!("Failed to set WASM fuel: {}", e))?;
+    store
+        .set_fuel(initial_fuel)
+        .map_err(|e| format!("Failed to set WASM fuel: {}", e))?;
 
     // 4. Build WASI snapshot preview1 Linker
     let mut linker = Linker::new(&engine);
 
-    let _ = linker.func_wrap("wasi_snapshot_preview1", "proc_exit", |mut caller: Caller<'_, VmContext>, code: i32| {
-        caller.data_mut().exit_code = code;
-    });
+    let _ = linker.func_wrap(
+        "wasi_snapshot_preview1",
+        "proc_exit",
+        |mut caller: Caller<'_, VmContext>, code: i32| {
+            caller.data_mut().exit_code = code;
+        },
+    );
 
     let _ = linker.func_wrap(
         "wasi_snapshot_preview1",
         "fd_write",
-        |mut caller: Caller<'_, VmContext>, fd: i32, iovs_ptr: u32, iovs_len: u32, nwritten_ptr: u32| -> i32 {
+        |mut caller: Caller<'_, VmContext>,
+         fd: i32,
+         iovs_ptr: u32,
+         iovs_len: u32,
+         nwritten_ptr: u32|
+         -> i32 {
             let memory = match caller.get_export("memory") {
                 Some(Extern::Memory(mem)) => mem,
                 _ => return 8,
@@ -135,40 +147,51 @@ pub fn run_wasi_nano_vm(
                 }
                 total_written += len as u32;
             }
-            let _ = memory.write(&mut caller, nwritten_ptr as usize, &total_written.to_le_bytes());
+            let _ = memory.write(
+                &mut caller,
+                nwritten_ptr as usize,
+                &total_written.to_le_bytes(),
+            );
             0
         },
     );
 
-    let _ = linker.func_wrap("wasi_snapshot_preview1", "environ_sizes_get", |mut caller: Caller<'_, VmContext>, count_ptr: u32, buf_size_ptr: u32| -> i32 {
-        if let Some(Extern::Memory(mem)) = caller.get_export("memory") {
-            let _ = mem.write(&mut caller, count_ptr as usize, &0u32.to_le_bytes());
-            let _ = mem.write(&mut caller, buf_size_ptr as usize, &0u32.to_le_bytes());
-        }
-        0
-    });
+    let _ = linker.func_wrap(
+        "wasi_snapshot_preview1",
+        "environ_sizes_get",
+        |mut caller: Caller<'_, VmContext>, count_ptr: u32, buf_size_ptr: u32| -> i32 {
+            if let Some(Extern::Memory(mem)) = caller.get_export("memory") {
+                let _ = mem.write(&mut caller, count_ptr as usize, &0u32.to_le_bytes());
+                let _ = mem.write(&mut caller, buf_size_ptr as usize, &0u32.to_le_bytes());
+            }
+            0
+        },
+    );
 
-    let _ = linker.func_wrap("wasi_snapshot_preview1", "args_sizes_get", |mut caller: Caller<'_, VmContext>, count_ptr: u32, buf_size_ptr: u32| -> i32 {
-        if let Some(Extern::Memory(mem)) = caller.get_export("memory") {
-            let _ = mem.write(&mut caller, count_ptr as usize, &0u32.to_le_bytes());
-            let _ = mem.write(&mut caller, buf_size_ptr as usize, &0u32.to_le_bytes());
-        }
-        0
-    });
+    let _ = linker.func_wrap(
+        "wasi_snapshot_preview1",
+        "args_sizes_get",
+        |mut caller: Caller<'_, VmContext>, count_ptr: u32, buf_size_ptr: u32| -> i32 {
+            if let Some(Extern::Memory(mem)) = caller.get_export("memory") {
+                let _ = mem.write(&mut caller, count_ptr as usize, &0u32.to_le_bytes());
+                let _ = mem.write(&mut caller, buf_size_ptr as usize, &0u32.to_le_bytes());
+            }
+            0
+        },
+    );
 
-    let _ = linker.func_wrap("wasi_snapshot_preview1", "clock_time_get", |_caller: Caller<'_, VmContext>, _id: i32, _precision: u64, _time_ptr: u32| -> i32 {
-        0
-    });
+    let _ = linker.func_wrap(
+        "wasi_snapshot_preview1",
+        "clock_time_get",
+        |_caller: Caller<'_, VmContext>, _id: i32, _precision: u64, _time_ptr: u32| -> i32 { 0 },
+    );
 
     // 5. Instantiate and execute
     let instance = linker
         .instantiate(&mut store, &module)
         .map_err(|e| format!("Failed to instantiate WASI Nano-VM: {}", e))?;
 
-    let exports: Vec<String> = module
-        .exports()
-        .map(|e| e.name().to_string())
-        .collect();
+    let exports: Vec<String> = module.exports().map(|e| e.name().to_string()).collect();
 
     if let Ok(func) = instance.get_typed_func::<(), ()>(&mut store, "_start") {
         let _ = func.call(&mut store, ());
@@ -207,37 +230,50 @@ pub fn run_wasi_nano_vm(
 }
 
 #[tauri::command]
-pub fn execute_marketplace_plugin(
-    plugin_id: String,
-    input_text: String,
-) -> AppResult<String> {
+pub fn execute_marketplace_plugin(plugin_id: String, input_text: String) -> AppResult<String> {
     match plugin_id.as_str() {
-        "wasm-rust-formatter" => {
-            Ok(format!("// Formatted by Rust AST Formatter v1.2.0\n{}", input_text.trim()))
-        }
+        "wasm-rust-formatter" => Ok(format!(
+            "// Formatted by Rust AST Formatter v1.2.0\n{}",
+            input_text.trim()
+        )),
         "wasm-sec-scanner" => {
             let mut findings = Vec::new();
             for (idx, line) in input_text.lines().enumerate() {
                 let lower = line.to_lowercase();
-                if lower.contains("secret") || lower.contains("password") || lower.contains("api_key") || lower.contains("bearer") {
-                    findings.push(format!("Line {}: Potential credential exposed: {}", idx + 1, line.trim()));
+                if lower.contains("secret")
+                    || lower.contains("password")
+                    || lower.contains("api_key")
+                    || lower.contains("bearer")
+                {
+                    findings.push(format!(
+                        "Line {}: Potential credential exposed: {}",
+                        idx + 1,
+                        line.trim()
+                    ));
                 }
             }
             if findings.is_empty() {
                 Ok("No secret leaks detected. File passes security policy.".to_string())
             } else {
-                Ok(format!("Scan completed — {} findings detected:\n{}", findings.len(), findings.join("\n")))
+                Ok(format!(
+                    "Scan completed — {} findings detected:\n{}",
+                    findings.len(),
+                    findings.join("\n")
+                ))
             }
         }
-        _ => Ok(format!("Plugin '{}' executed successfully on target input.", plugin_id)),
+        _ => Ok(format!(
+            "Plugin '{}' executed successfully on target input.",
+            plugin_id
+        )),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
     use std::io::Write;
+    use tempfile::NamedTempFile;
 
     #[test]
     fn test_run_wasm_plugin_invalid_file() {
@@ -267,7 +303,11 @@ mod tests {
 
     #[test]
     fn test_execute_marketplace_plugin() {
-        let res = execute_marketplace_plugin("wasm-sec-scanner".to_string(), "api_key = 12345678".to_string()).unwrap();
+        let res = execute_marketplace_plugin(
+            "wasm-sec-scanner".to_string(),
+            "api_key = 12345678".to_string(),
+        )
+        .unwrap();
         assert!(res.contains("Potential credential exposed"));
     }
 }

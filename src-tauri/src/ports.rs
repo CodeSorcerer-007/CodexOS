@@ -136,11 +136,15 @@ pub fn kill_process(pid: String) -> AppResult<String> {
 
     let trimmed_pid = pid.trim();
     if trimmed_pid.is_empty() || !trimmed_pid.chars().all(|c| c.is_ascii_digit()) {
-        return Err(AppError::Custom("Invalid process ID: PID must be numeric digits only".to_string()));
+        return Err(AppError::Custom(
+            "Invalid process ID: PID must be numeric digits only".to_string(),
+        ));
     }
 
     let output = if cfg!(target_os = "windows") {
-        Command::new("taskkill").args(["/F", "/PID", trimmed_pid]).output()
+        Command::new("taskkill")
+            .args(["/F", "/PID", trimmed_pid])
+            .output()
     } else {
         Command::new("kill").args(["-9", trimmed_pid]).output()
     }
@@ -157,7 +161,9 @@ pub fn kill_process(pid: String) -> AppResult<String> {
 #[tauri::command]
 pub fn spawn_local_server(path: String) -> AppResult<String> {
     let p = require_absolute_dir(&path)?;
-    let base_canonical = p.canonicalize().map_err(|e| format!("Failed to resolve directory: {}", e))?;
+    let base_canonical = p
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve directory: {}", e))?;
     use std::thread;
     use tiny_http::{Response, Server};
 
@@ -172,7 +178,9 @@ pub fn spawn_local_server(path: String) -> AppResult<String> {
         }
     }
     let server = bound_server.ok_or_else(|| {
-        AppError::Custom("Failed to bind local server: all ports in range 8080-8099 are in use".to_string())
+        AppError::Custom(
+            "Failed to bind local server: all ports in range 8080-8099 are in use".to_string(),
+        )
     })?;
 
     thread::spawn(move || {
@@ -200,8 +208,7 @@ pub fn spawn_local_server(path: String) -> AppResult<String> {
                 }
             }
 
-            let _ = request
-                .respond(Response::from_string("404 Not Found").with_status_code(404));
+            let _ = request.respond(Response::from_string("404 Not Found").with_status_code(404));
         }
     });
 
@@ -265,9 +272,9 @@ pub async fn execute_http_request(
     method: String,
     body: Option<String>,
 ) -> AppResult<String> {
-    let parsed_url: hyper::Uri = url
-        .parse()
-        .map_err(|e: hyper::http::uri::InvalidUri| AppError::Custom(format!("Invalid URL: {}", e)))?;
+    let parsed_url: hyper::Uri = url.parse().map_err(|e: hyper::http::uri::InvalidUri| {
+        AppError::Custom(format!("Invalid URL: {}", e))
+    })?;
     let host = parsed_url.host().unwrap_or("").to_string();
 
     if crate::proxy::is_ssrf_blocked(&host, &[]) {

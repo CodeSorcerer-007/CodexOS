@@ -1,5 +1,5 @@
-use crate::error::{AppError, AppResult};
 use crate::cli_runner::{run_cli, run_cli_parse};
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -15,7 +15,13 @@ pub fn detect_tool(tool: String) -> String {
     };
 
     run_cli(&tool, &args, None)
-        .map(|r| if r.exit_code == 0 { r.stdout.trim().to_string() } else { String::new() })
+        .map(|r| {
+            if r.exit_code == 0 {
+                r.stdout.trim().to_string()
+            } else {
+                String::new()
+            }
+        })
         .unwrap_or_default()
 }
 
@@ -25,12 +31,18 @@ pub fn detect_tool(tool: String) -> String {
 pub fn is_ollama_running() -> bool {
     // A HEAD request is sufficient; we only care about reachability.
     std::process::Command::new("curl")
-        .args(["--silent", "--fail", "--max-time", "2", "--head", "http://127.0.0.1:11434/"])
+        .args([
+            "--silent",
+            "--fail",
+            "--max-time",
+            "2",
+            "--head",
+            "http://127.0.0.1:11434/",
+        ])
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
-
 
 /// Executes the get_os_info command.
 #[tauri::command]
@@ -48,10 +60,15 @@ pub struct WindowsService {
 
 fn validate_env_var_name(name: &str) -> AppResult<()> {
     if name.is_empty() || name.len() > 256 {
-        return Err(AppError::Custom("Environment variable name must be between 1 and 256 characters".into()));
+        return Err(AppError::Custom(
+            "Environment variable name must be between 1 and 256 characters".into(),
+        ));
     }
     if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-        return Err(AppError::Custom("Environment variable name must contain only alphanumeric characters and underscores".into()));
+        return Err(AppError::Custom(
+            "Environment variable name must contain only alphanumeric characters and underscores"
+                .into(),
+        ));
     }
     Ok(())
 }
@@ -59,9 +76,16 @@ fn validate_env_var_name(name: &str) -> AppResult<()> {
 /// Executes the get_env_vars command.
 #[tauri::command]
 pub fn get_env_vars() -> AppResult<HashMap<String, String>> {
-    run_cli_parse("powershell", &["-NoProfile", "-Command", "[Environment]::GetEnvironmentVariables('User') | ConvertTo-Json"], None, |stdout| {
-        serde_json::from_str(stdout).map_err(|e| AppError::Custom(e.to_string()))
-    })
+    run_cli_parse(
+        "powershell",
+        &[
+            "-NoProfile",
+            "-Command",
+            "[Environment]::GetEnvironmentVariables('User') | ConvertTo-Json",
+        ],
+        None,
+        |stdout| serde_json::from_str(stdout).map_err(|e| AppError::Custom(e.to_string())),
+    )
 }
 
 /// Executes the set_env_var command.
@@ -114,9 +138,12 @@ pub fn delete_env_var(name: String) -> AppResult<()> {
 #[tauri::command]
 pub fn get_services() -> AppResult<Vec<WindowsService>> {
     let script = "Get-Service | Select-Object Name, DisplayName, @{Name='status';Expression={$_.Status.ToString()}}, @{Name='start_type';Expression={$_.StartType.ToString()}} | ConvertTo-Json -Depth 2";
-    run_cli_parse("powershell", &["-NoProfile", "-Command", script], None, |stdout| {
-        serde_json::from_str(stdout).map_err(|e| AppError::Custom(e.to_string()))
-    })
+    run_cli_parse(
+        "powershell",
+        &["-NoProfile", "-Command", script],
+        None,
+        |stdout| serde_json::from_str(stdout).map_err(|e| AppError::Custom(e.to_string())),
+    )
 }
 
 /// Executes the manage_service command.
@@ -126,22 +153,39 @@ pub fn manage_service(name: String, action: String) -> AppResult<()> {
         "start" => "Start",
         "stop" => "Stop",
         "restart" => "Restart",
-        _ => return Err(AppError::Custom("Invalid service action. Allowed actions: start, stop, restart".into())),
+        _ => {
+            return Err(AppError::Custom(
+                "Invalid service action. Allowed actions: start, stop, restart".into(),
+            ))
+        }
     };
-    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.') {
-        return Err(AppError::Custom("Invalid service name. Contains disallowed characters".into()));
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '.')
+    {
+        return Err(AppError::Custom(
+            "Invalid service name. Contains disallowed characters".into(),
+        ));
     }
     let script = match normalized_action {
         "Start" => "param($svc) Start-Service -Name $svc -Force",
         "Stop" => "param($svc) Stop-Service -Name $svc -Force",
         _ => "param($svc) Restart-Service -Name $svc -Force",
     };
-    let res = run_cli("powershell", &["-NoProfile", "-Command", script, "-svc", &name], None)?;
-    
+    let res = run_cli(
+        "powershell",
+        &["-NoProfile", "-Command", script, "-svc", &name],
+        None,
+    )?;
+
     if res.exit_code != 0 {
         let err = res.stderr;
         if err.contains("Access is denied") || err.contains("Cannot open") {
-            return Err(AppError::Command("Access Denied: You must run CodexOS as Administrator to modify this service.".to_string()));
+            return Err(AppError::Command(
+                "Access Denied: You must run CodexOS as Administrator to modify this service."
+                    .to_string(),
+            ));
         }
         return Err(AppError::Command(err));
     }
@@ -152,16 +196,21 @@ pub fn manage_service(name: String, action: String) -> AppResult<()> {
 #[tauri::command]
 pub fn list_wsl_distros() -> AppResult<Vec<String>> {
     let script = "Get-ChildItem HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss -ErrorAction SilentlyContinue | ForEach-Object { (Get-ItemProperty $_.PSPath).DistributionName }";
-    run_cli_parse("powershell", &["-NoProfile", "-Command", script], None, |stdout| {
-        let mut distros = Vec::new();
-        for line in stdout.lines() {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() {
-                distros.push(trimmed.to_string());
+    run_cli_parse(
+        "powershell",
+        &["-NoProfile", "-Command", script],
+        None,
+        |stdout| {
+            let mut distros = Vec::new();
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    distros.push(trimmed.to_string());
+                }
             }
-        }
-        Ok(distros)
-    })
+            Ok(distros)
+        },
+    )
 }
 
 /// Executes the get_project_tasks command.
@@ -211,8 +260,15 @@ pub fn get_project_tasks(path: String) -> AppResult<HashMap<String, String>> {
                 }
                 if let Some((target, _)) = trimmed.split_once(':') {
                     let target_name = target.trim();
-                    if !target_name.contains(' ') && !target_name.contains('$') && !target_name.contains('=') && !target_name.is_empty() {
-                        tasks.insert(format!("make:{}", target_name), format!("make {}", target_name));
+                    if !target_name.contains(' ')
+                        && !target_name.contains('$')
+                        && !target_name.contains('=')
+                        && !target_name.is_empty()
+                    {
+                        tasks.insert(
+                            format!("make:{}", target_name),
+                            format!("make {}", target_name),
+                        );
                     }
                 }
             }
@@ -246,12 +302,25 @@ pub fn write_hosts(content: String) -> AppResult<()> {
     }
 
     if cfg!(target_os = "windows") {
-        let temp_path = std::env::temp_dir().join(format!("codexos_hosts_{}.tmp", std::process::id()));
+        let temp_path =
+            std::env::temp_dir().join(format!("codexos_hosts_{}.tmp", std::process::id()));
         std::fs::write(&temp_path, &content)?;
 
         let temp_str = temp_path.to_string_lossy().to_string();
         let script = "param($src, $dst) Start-Process powershell -ArgumentList ('-NoProfile -Command Copy-Item -LiteralPath \"' + $src + '\" -Destination \"' + $dst + '\" -Force') -Verb RunAs -WindowStyle Hidden -Wait";
-        let res = run_cli("powershell", &["-NoProfile", "-Command", script, "-src", &temp_str, "-dst", path], None);
+        let res = run_cli(
+            "powershell",
+            &[
+                "-NoProfile",
+                "-Command",
+                script,
+                "-src",
+                &temp_str,
+                "-dst",
+                path,
+            ],
+            None,
+        );
 
         let _ = std::fs::remove_file(&temp_path);
         let res = res?;
@@ -259,10 +328,14 @@ pub fn write_hosts(content: String) -> AppResult<()> {
         if res.exit_code == 0 {
             Ok(())
         } else {
-            Err(AppError::Command("Failed to acquire Administrator privileges to save hosts file.".to_string()))
+            Err(AppError::Command(
+                "Failed to acquire Administrator privileges to save hosts file.".to_string(),
+            ))
         }
     } else {
-        Err(AppError::Command("Permission denied: Modifying /etc/hosts requires root privileges (sudo).".to_string()))
+        Err(AppError::Command(
+            "Permission denied: Modifying /etc/hosts requires root privileges (sudo).".to_string(),
+        ))
     }
 }
 
@@ -273,11 +346,19 @@ pub fn install_font(path: String) -> AppResult<String> {
     if !font_path.exists() || !font_path.is_file() {
         return Err(AppError::Custom("Font file does not exist".into()));
     }
-    let ext = font_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let ext = font_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     if !["ttf", "otf", "fon", "ttc"].contains(&ext.as_str()) {
-        return Err(AppError::Custom("Invalid font format. Expected .ttf, .otf, .fon, or .ttc".into()));
+        return Err(AppError::Custom(
+            "Invalid font format. Expected .ttf, .otf, .fon, or .ttc".into(),
+        ));
     }
-    let canonical_path = font_path.canonicalize().map_err(|e| AppError::Custom(format!("Cannot resolve font path: {}", e)))?;
+    let canonical_path = font_path
+        .canonicalize()
+        .map_err(|e| AppError::Custom(format!("Cannot resolve font path: {}", e)))?;
     let canonical_str = canonical_path.to_string_lossy().to_string();
 
     let res = run_cli(
@@ -335,7 +416,7 @@ pub fn execute_command(
     } else {
         run_cli("sh", &["-c", &command], Some(p))?
     };
-    
+
     if res.exit_code == 0 {
         Ok(res.stdout)
     } else {
@@ -377,7 +458,11 @@ mod tests {
     fn test_get_project_tasks_package_json() {
         let dir = tempdir().unwrap();
         let pkg_file = dir.path().join("package.json");
-        std::fs::write(&pkg_file, r#"{"scripts": {"build": "tsc", "test": "vitest"}}"#).unwrap();
+        std::fs::write(
+            &pkg_file,
+            r#"{"scripts": {"build": "tsc", "test": "vitest"}}"#,
+        )
+        .unwrap();
 
         let tasks = get_project_tasks(dir.path().to_string_lossy().to_string()).unwrap();
         assert_eq!(tasks.get("build").unwrap(), "tsc");
@@ -388,7 +473,11 @@ mod tests {
     fn test_get_project_tasks_cargo_and_makefile() {
         let dir = tempdir().unwrap();
         let cargo_file = dir.path().join("Cargo.toml");
-        std::fs::write(&cargo_file, "[package]\nname = \"test_pkg\"\nversion = \"0.1.0\"\n").unwrap();
+        std::fs::write(
+            &cargo_file,
+            "[package]\nname = \"test_pkg\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
 
         let make_file = dir.path().join("Makefile");
         std::fs::write(&make_file, "all:\n\techo all\nclean:\n\trm -rf target\n").unwrap();

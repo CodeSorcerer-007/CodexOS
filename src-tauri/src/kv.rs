@@ -8,6 +8,12 @@ pub struct KvState {
     pub db: Arc<Mutex<Option<Connection>>>,
 }
 
+impl Default for KvState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvState {
     pub fn new() -> Self {
         KvState {
@@ -62,12 +68,18 @@ where
 
 /// Persistent SQLite Key-Value Store: write key/value
 #[tauri::command]
-pub fn kv_set(app_handle: tauri::AppHandle, state: tauri::State<'_, KvState>, key: String, value: String) -> Result<(), String> {
+pub fn kv_set(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, KvState>,
+    key: String,
+    value: String,
+) -> Result<(), String> {
     let res = with_kv_db(&app_handle, &state, |conn| {
         conn.execute(
             "INSERT OR REPLACE INTO store_kv (key, value) VALUES (?1, ?2)",
             rusqlite::params![key, value],
-        ).ok()
+        )
+        .ok()
     });
     if res.is_some() {
         Ok(())
@@ -78,10 +90,18 @@ pub fn kv_set(app_handle: tauri::AppHandle, state: tauri::State<'_, KvState>, ke
 
 /// Persistent SQLite Key-Value Store: read key
 #[tauri::command]
-pub fn kv_get(app_handle: tauri::AppHandle, state: tauri::State<'_, KvState>, key: String) -> Result<Option<String>, String> {
+pub fn kv_get(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, KvState>,
+    key: String,
+) -> Result<Option<String>, String> {
     let res = with_kv_db(&app_handle, &state, |conn| {
-        let mut stmt = conn.prepare("SELECT value FROM store_kv WHERE key = ?1").ok()?;
-        let mut iter = stmt.query_map(rusqlite::params![key], |row| row.get::<_, String>(0)).ok()?;
+        let mut stmt = conn
+            .prepare("SELECT value FROM store_kv WHERE key = ?1")
+            .ok()?;
+        let mut iter = stmt
+            .query_map(rusqlite::params![key], |row| row.get::<_, String>(0))
+            .ok()?;
         if let Some(Ok(val)) = iter.next() {
             Some(Some(val))
         } else {
@@ -104,15 +124,21 @@ mod tests {
                 value TEXT NOT NULL
             )",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         conn.execute(
             "INSERT OR REPLACE INTO store_kv (key, value) VALUES (?1, ?2)",
             rusqlite::params!["test_key", "test_value"],
-        ).unwrap();
+        )
+        .unwrap();
 
-        let mut stmt = conn.prepare("SELECT value FROM store_kv WHERE key = ?1").unwrap();
-        let val: String = stmt.query_row(rusqlite::params!["test_key"], |row| row.get(0)).unwrap();
+        let mut stmt = conn
+            .prepare("SELECT value FROM store_kv WHERE key = ?1")
+            .unwrap();
+        let val: String = stmt
+            .query_row(rusqlite::params!["test_key"], |row| row.get(0))
+            .unwrap();
         assert_eq!(val, "test_value");
     }
 }

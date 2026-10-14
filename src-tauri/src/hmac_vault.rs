@@ -8,10 +8,14 @@ const MAX_VAULT_DATA_BYTES: usize = 50 * 1024 * 1024; // 50 MB
 #[tauri::command]
 pub fn generate_hmac_proof(vault_data: String, secret_key: String) -> AppResult<String> {
     if secret_key.trim().is_empty() {
-        return Err(crate::error::AppError::Custom("HMAC secret key cannot be empty".to_string()));
+        return Err(crate::error::AppError::Custom(
+            "HMAC secret key cannot be empty".to_string(),
+        ));
     }
     if vault_data.len() > MAX_VAULT_DATA_BYTES {
-        return Err(crate::error::AppError::Custom("Vault payload exceeds maximum size limit (50 MB)".to_string()));
+        return Err(crate::error::AppError::Custom(
+            "Vault payload exceeds maximum size limit (50 MB)".to_string(),
+        ));
     }
 
     // Generate a secure random nonce
@@ -41,15 +45,21 @@ pub fn verify_hmac_proof(
     secret_key: String,
 ) -> AppResult<bool> {
     if secret_key.trim().is_empty() {
-        return Err(crate::error::AppError::Custom("HMAC verification key cannot be empty".to_string()));
+        return Err(crate::error::AppError::Custom(
+            "HMAC verification key cannot be empty".to_string(),
+        ));
     }
     if expected_vault_data.len() > MAX_VAULT_DATA_BYTES {
-        return Err(crate::error::AppError::Custom("Expected vault payload exceeds maximum size limit (50 MB)".to_string()));
+        return Err(crate::error::AppError::Custom(
+            "Expected vault payload exceeds maximum size limit (50 MB)".to_string(),
+        ));
     }
 
     let parts: Vec<&str> = proof_hash.split(':').collect();
     if parts.len() != 2 {
-        return Err(crate::error::AppError::Custom("Invalid proof format".to_string()));
+        return Err(crate::error::AppError::Custom(
+            "Invalid proof format".to_string(),
+        ));
     }
 
     let nonce = hex::decode(parts[0]).map_err(|_| "Invalid nonce encoding")?;
@@ -98,6 +108,8 @@ mod tests {
     #[test]
     fn test_empty_key_fails() {
         assert!(generate_hmac_proof("data".to_string(), "".to_string()).is_err());
-        assert!(verify_hmac_proof("aa:bb".to_string(), "data".to_string(), "".to_string()).is_err());
+        assert!(
+            verify_hmac_proof("aa:bb".to_string(), "data".to_string(), "".to_string()).is_err()
+        );
     }
 }

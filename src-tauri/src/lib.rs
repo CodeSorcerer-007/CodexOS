@@ -1,34 +1,34 @@
 use std::sync::Mutex;
 use sysinfo::System;
 
-pub mod error;
-pub mod util;
-pub mod kv;
 pub mod ai;
 pub mod db;
+pub mod db_migration;
 pub mod devdocs;
+pub mod diagnostics;
+pub mod error;
+pub mod fs_cache;
+pub mod hmac_vault;
+pub mod kv;
 pub mod multiplexer;
 pub mod plugin;
 pub mod proxy;
 pub mod secrets;
 pub mod sys;
 pub mod tunnel;
+pub mod util;
 pub mod vault;
-pub mod hmac_vault;
-pub mod fs_cache;
-pub mod db_migration;
-pub mod diagnostics;
 
 pub mod archive;
-pub mod crypto_tools;
 pub mod cli_runner;
+pub mod commands;
+pub mod crypto_tools;
 pub mod docker;
 pub mod files;
 pub mod git;
 pub mod ports;
 pub mod ssh;
 pub mod system_tools;
-pub mod commands;
 pub mod tray;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -62,7 +62,7 @@ pub fn run() {
             } else {
                 log::warn!("'main' webview window not found during setup");
             }
-            
+
             let log_level = if cfg!(debug_assertions) {
                 log::LevelFilter::Info
             } else {

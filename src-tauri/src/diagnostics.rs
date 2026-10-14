@@ -100,17 +100,27 @@ pub fn sanitize_log_text(raw: &str) -> String {
 
     // Redact Bearer tokens
     if let Ok(re_bearer) = regex::Regex::new(r"(?i)bearer\s+[a-zA-Z0-9_\-\.]{15,}") {
-        sanitized = re_bearer.replace_all(&sanitized, "Bearer [REDACTED]").to_string();
+        sanitized = re_bearer
+            .replace_all(&sanitized, "Bearer [REDACTED]")
+            .to_string();
     }
 
     // Redact Mistral / OpenAI / generic API keys
-    if let Ok(re_key) = regex::Regex::new(r#"(?i)(api[-_]?key|secret|password)\s*[:=]\s*['"]?[a-zA-Z0-9_\-.]{10,}['"]?"#) {
-        sanitized = re_key.replace_all(&sanitized, "$1: \"[REDACTED]\"").to_string();
+    if let Ok(re_key) = regex::Regex::new(
+        r#"(?i)(api[-_]?key|secret|password)\s*[:=]\s*['"]?[a-zA-Z0-9_\-.]{10,}['"]?"#,
+    ) {
+        sanitized = re_key
+            .replace_all(&sanitized, "$1: \"[REDACTED]\"")
+            .to_string();
     }
 
     // Redact SSH private key blocks
-    if let Ok(re_ssh) = regex::Regex::new(r"(?s)-----BEGIN [A-Z ]+ PRIVATE KEY-----.*?-----END [A-Z ]+ PRIVATE KEY-----") {
-        sanitized = re_ssh.replace_all(&sanitized, "[REDACTED_PRIVATE_KEY_BLOCK]").to_string();
+    if let Ok(re_ssh) = regex::Regex::new(
+        r"(?s)-----BEGIN [A-Z ]+ PRIVATE KEY-----.*?-----END [A-Z ]+ PRIVATE KEY-----",
+    ) {
+        sanitized = re_ssh
+            .replace_all(&sanitized, "[REDACTED_PRIVATE_KEY_BLOCK]")
+            .to_string();
     }
 
     sanitized
@@ -209,8 +219,8 @@ pub fn export_system_report(
     let file = File::create(&zip_path)
         .map_err(|e| format!("Failed to create diagnostic archive: {}", e))?;
     let mut zip = ZipWriter::new(file);
-    let file_options = SimpleFileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let file_options =
+        SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     // 1. Write System Metadata
     let summary = get_diagnostics_summary(app_handle.clone(), kv_state.clone())?;

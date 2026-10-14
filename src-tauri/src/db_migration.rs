@@ -125,7 +125,10 @@ pub fn run_migrations(conn: &mut Connection) -> Result<u32> {
     }
 
     let final_version = get_user_version(conn)?;
-    log::info!("SQLite migrations complete. Active schema version={}", final_version);
+    log::info!(
+        "SQLite migrations complete. Active schema version={}",
+        final_version
+    );
     Ok(final_version)
 }
 
@@ -163,7 +166,11 @@ mod tests {
         assert_eq!(get_user_version(&conn).unwrap(), 3);
 
         // Verify tables exist
-        conn.execute("INSERT INTO store_kv (key, value) VALUES ('test', '123')", []).unwrap();
+        conn.execute(
+            "INSERT INTO store_kv (key, value) VALUES ('test', '123')",
+            [],
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO diagnostics_events (event_type, details, created_at) VALUES ('info', 'test event', 1000)",
             [],
@@ -171,7 +178,8 @@ mod tests {
         conn.execute(
             "INSERT INTO settings_meta (key, schema_version, updated_at) VALUES ('theme', 3, 1000)",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         let status = get_migration_status(&conn).unwrap();
         assert!(status.is_up_to_date);

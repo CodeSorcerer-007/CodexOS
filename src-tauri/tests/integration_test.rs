@@ -1,6 +1,6 @@
-use app_lib::proxy::is_ssrf_blocked;
-use app_lib::vault::{encrypt_vault, decrypt_vault};
 use app_lib::files::AllowedPathsState;
+use app_lib::proxy::is_ssrf_blocked;
+use app_lib::vault::{decrypt_vault, encrypt_vault};
 use tempfile::tempdir;
 
 #[test]
@@ -20,7 +20,10 @@ fn test_ssrf_firewall_blocks_local_and_private_ips() {
     // Cloud Metadata Endpoints
     assert!(is_ssrf_blocked("169.254.169.254", &empty_whitelist));
     assert!(is_ssrf_blocked("169.254.1.1", &empty_whitelist));
-    assert!(is_ssrf_blocked("metadata.google.internal", &empty_whitelist));
+    assert!(is_ssrf_blocked(
+        "metadata.google.internal",
+        &empty_whitelist
+    ));
     assert!(is_ssrf_blocked("instance-data", &empty_whitelist));
 
     // RFC-1918 Private IPv4 Ranges
@@ -78,7 +81,11 @@ fn test_vault_encryption_roundtrip_with_strong_password() {
     let vault_file = dir.path().join("test_vault.enc");
 
     std::fs::create_dir_all(&src_dir).unwrap();
-    std::fs::write(src_dir.join("secret_data.txt"), "codexos-production-10-out-of-10").unwrap();
+    std::fs::write(
+        src_dir.join("secret_data.txt"),
+        "codexos-production-10-out-of-10",
+    )
+    .unwrap();
 
     let password = "super-secret-vault-password-2026".to_string();
 
@@ -151,14 +158,20 @@ fn test_kv_sqlite_roundtrip_integration() {
             value TEXT NOT NULL
         )",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "INSERT OR REPLACE INTO store_kv (key, value) VALUES (?1, ?2)",
         rusqlite::params!["codexos-settings", "{\"theme\":\"dark\"}"],
-    ).unwrap();
+    )
+    .unwrap();
 
-    let mut stmt = conn.prepare("SELECT value FROM store_kv WHERE key = ?1").unwrap();
-    let val: String = stmt.query_row(rusqlite::params!["codexos-settings"], |row| row.get(0)).unwrap();
+    let mut stmt = conn
+        .prepare("SELECT value FROM store_kv WHERE key = ?1")
+        .unwrap();
+    let val: String = stmt
+        .query_row(rusqlite::params!["codexos-settings"], |row| row.get(0))
+        .unwrap();
     assert_eq!(val, "{\"theme\":\"dark\"}");
 }

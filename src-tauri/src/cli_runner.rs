@@ -49,7 +49,11 @@ mod tests {
 
     #[test]
     fn test_run_cli_success() {
-        let (cmd, args) = if cfg!(windows) { ("cmd", vec!["/C", "echo", "hello"]) } else { ("echo", vec!["hello"]) };
+        let (cmd, args) = if cfg!(windows) {
+            ("cmd", vec!["/C", "echo", "hello"])
+        } else {
+            ("echo", vec!["hello"])
+        };
         let res = run_cli(cmd, &args, None).unwrap();
         assert_eq!(res.exit_code, 0);
         assert!(res.stdout.contains("hello"));
@@ -63,11 +67,16 @@ mod tests {
 
     #[test]
     fn test_run_cli_parse_success() {
-        let (cmd, args) = if cfg!(windows) { ("cmd", vec!["/C", "echo", "42"]) } else { ("echo", vec!["42"]) };
+        let (cmd, args) = if cfg!(windows) {
+            ("cmd", vec!["/C", "echo", "42"])
+        } else {
+            ("echo", vec!["42"])
+        };
         let parsed = run_cli_parse(cmd, &args, None, |out| {
             let num: i32 = out.trim().parse().unwrap_or(0);
             Ok(num)
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(parsed, 42);
     }
 
@@ -75,12 +84,14 @@ mod tests {
     fn test_run_cli_parse_error() {
         // Run a command that fails, expect Err
         let cmd = if cfg!(windows) { "cmd" } else { "false" };
-        let args = if cfg!(windows) { vec!["/c", "exit 1"] } else { vec![] };
-        
-        let res = run_cli_parse(cmd, &args, None, |out| {
-            Ok(out.to_string())
-        });
-        
+        let args = if cfg!(windows) {
+            vec!["/c", "exit 1"]
+        } else {
+            vec![]
+        };
+
+        let res = run_cli_parse(cmd, &args, None, |out| Ok(out.to_string()));
+
         assert!(res.is_err());
     }
 }

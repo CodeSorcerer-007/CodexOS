@@ -15,6 +15,12 @@ pub struct MultiPtyState {
     pub output_buffers: Arc<Mutex<HashMap<String, VecDeque<String>>>>,
 }
 
+impl Default for MultiPtyState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MultiPtyState {
     pub fn new() -> Self {
         Self {
@@ -26,7 +32,11 @@ impl MultiPtyState {
     }
 }
 
-fn append_to_buffer(buffers: &Arc<Mutex<HashMap<String, VecDeque<String>>>>, id: &str, chunk: &str) {
+fn append_to_buffer(
+    buffers: &Arc<Mutex<HashMap<String, VecDeque<String>>>>,
+    id: &str,
+    chunk: &str,
+) {
     let mut map = lock_poison_recover(buffers);
     let buf = map.entry(id.to_string()).or_default();
     for line in chunk.lines() {
@@ -179,10 +189,7 @@ pub fn write_multiplex_pty(
 
 /// Executes the kill_multiplex_pty command.
 #[tauri::command]
-pub fn kill_multiplex_pty(
-    id: String,
-    state: tauri::State<'_, MultiPtyState>,
-) -> AppResult<()> {
+pub fn kill_multiplex_pty(id: String, state: tauri::State<'_, MultiPtyState>) -> AppResult<()> {
     let mut guard = lock_poison_recover(&state.children);
     if let Some(mut child) = guard.remove(&id) {
         let _ = child.kill();
@@ -225,9 +232,9 @@ mod tests {
     fn test_append_to_buffer() {
         let buffers = Arc::new(Mutex::new(HashMap::new()));
         let id = "test1";
-        
+
         append_to_buffer(&buffers, id, "line1\nline2");
-        
+
         let map = buffers.lock().unwrap();
         let buf = map.get(id).unwrap();
         assert_eq!(buf.len(), 2);
@@ -239,17 +246,17 @@ mod tests {
     fn test_append_to_buffer_max_lines() {
         let buffers = Arc::new(Mutex::new(HashMap::new()));
         let id = "test2";
-        
+
         let mut large_string = String::new();
         for i in 0..250 {
             large_string.push_str(&format!("line{}\n", i));
         }
-        
+
         append_to_buffer(&buffers, id, &large_string);
-        
+
         let map = buffers.lock().unwrap();
         let buf = map.get(id).unwrap();
-        
+
         assert_eq!(buf.len(), MAX_BUFFER_LINES);
         assert_eq!(buf.back().unwrap(), "line249");
         assert_eq!(buf.front().unwrap(), "line50");

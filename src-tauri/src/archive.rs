@@ -90,7 +90,8 @@ mod tests {
         {
             let file = std::fs::File::create(&path).unwrap();
             let mut zip = ZipWriter::new(file);
-            let options = FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
+            let options =
+                FileOptions::<()>::default().compression_method(zip::CompressionMethod::Stored);
 
             zip.start_file("test.txt", options).unwrap();
             zip.write_all(b"Hello from inside zip!").unwrap();

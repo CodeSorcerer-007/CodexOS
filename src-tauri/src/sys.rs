@@ -191,21 +191,29 @@ pub fn get_gpu_utilization() -> AppResult<u8> {
 
 #[tauri::command]
 pub fn window_minimize(window: tauri::WebviewWindow) -> AppResult<()> {
-    window.minimize().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+    window
+        .minimize()
+        .map_err(|e| crate::error::AppError::Custom(e.to_string()))
 }
 
 #[tauri::command]
 pub fn window_toggle_maximize(window: tauri::WebviewWindow) -> AppResult<()> {
     if window.is_maximized().unwrap_or(false) {
-        window.unmaximize().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+        window
+            .unmaximize()
+            .map_err(|e| crate::error::AppError::Custom(e.to_string()))
     } else {
-        window.maximize().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+        window
+            .maximize()
+            .map_err(|e| crate::error::AppError::Custom(e.to_string()))
     }
 }
 
 #[tauri::command]
 pub fn window_close(window: tauri::WebviewWindow) -> AppResult<()> {
-    window.close().map_err(|e| crate::error::AppError::Custom(e.to_string()))
+    window
+        .close()
+        .map_err(|e| crate::error::AppError::Custom(e.to_string()))
 }
 
 #[cfg(test)]

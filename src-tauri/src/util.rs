@@ -5,7 +5,9 @@ use std::sync::{Mutex, MutexGuard};
 /// Recovers from a poisoned mutex guard without panicking, ensuring resilience
 /// in long-running desktop application processes.
 pub fn lock_poison_recover<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Global minimum password length for cryptographic vaults and secrets management.

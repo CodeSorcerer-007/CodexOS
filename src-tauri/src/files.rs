@@ -15,6 +15,12 @@ pub struct AllowedPathsState {
     pub allowed_roots: Mutex<HashSet<PathBuf>>,
 }
 
+impl Default for AllowedPathsState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AllowedPathsState {
     pub fn new() -> Self {
         let mut set = HashSet::new();
@@ -117,17 +123,24 @@ pub fn validate_path(path: &str, state: &AllowedPathsState) -> AppResult<PathBuf
 pub fn add_allowed_path(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
     let p = normalize_path(Path::new(&path));
     if !p.is_absolute() {
-        return Err(AppError::Custom("Allowed path must be absolute".to_string()));
+        return Err(AppError::Custom(
+            "Allowed path must be absolute".to_string(),
+        ));
     }
     if !p.exists() || !p.is_dir() {
-        return Err(AppError::Custom("Allowed path must be an existing directory".to_string()));
+        return Err(AppError::Custom(
+            "Allowed path must be an existing directory".to_string(),
+        ));
     }
     state.allow(&p);
     Ok(())
 }
 
 #[tauri::command]
-pub fn remove_allowed_path(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
+pub fn remove_allowed_path(
+    path: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<()> {
     let p = PathBuf::from(&path);
     state.remove(&p);
     Ok(())
@@ -136,7 +149,10 @@ pub fn remove_allowed_path(path: String, state: tauri::State<'_, AllowedPathsSta
 #[tauri::command]
 pub fn get_allowed_paths(state: tauri::State<'_, AllowedPathsState>) -> Vec<String> {
     let guard = lock_poison_recover(&state.allowed_roots);
-    guard.iter().map(|p| p.to_string_lossy().to_string()).collect()
+    guard
+        .iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -213,7 +229,10 @@ pub fn get_drives() -> Vec<DriveInfo> {
 
 /// Executes the read_file_text command with sandbox verification and 20MB memory safety cap.
 #[tauri::command]
-pub fn read_file_text(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<String> {
+pub fn read_file_text(
+    path: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<String> {
     let p = validate_path(&path, &state)?;
     let meta = fs::metadata(&p).map_err(AppError::from)?;
     if meta.len() > MAX_TEXT_FILE_READ_BYTES {
@@ -227,7 +246,11 @@ pub fn read_file_text(path: String, state: tauri::State<'_, AllowedPathsState>) 
 
 /// Executes the write_file_text command with sandbox verification.
 #[tauri::command]
-pub fn write_file_text(path: String, content: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
+pub fn write_file_text(
+    path: String,
+    content: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<()> {
     let p = validate_path(&path, &state)?;
     std::fs::write(p, content).map_err(AppError::from)
 }
@@ -249,7 +272,11 @@ pub fn create_directory(path: String, state: tauri::State<'_, AllowedPathsState>
 
 /// Executes the rename_path command with sandbox verification.
 #[tauri::command]
-pub fn rename_path(old_path: String, new_path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
+pub fn rename_path(
+    old_path: String,
+    new_path: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<()> {
     let p_old = validate_path(&old_path, &state)?;
     let p_new = validate_path(&new_path, &state)?;
     std::fs::rename(p_old, p_new).map_err(AppError::from)
@@ -257,14 +284,21 @@ pub fn rename_path(old_path: String, new_path: String, state: tauri::State<'_, A
 
 /// Executes the read_file_binary command with sandbox verification.
 #[tauri::command]
-pub fn read_file_binary(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<Vec<u8>> {
+pub fn read_file_binary(
+    path: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<Vec<u8>> {
     let p = validate_path(&path, &state)?;
     fs::read(p).map_err(AppError::from)
 }
 
 /// Executes the write_file_binary_webrtc command with sandbox verification.
 #[tauri::command]
-pub fn write_file_binary_webrtc(path: String, data: Vec<u8>, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
+pub fn write_file_binary_webrtc(
+    path: String,
+    data: Vec<u8>,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<()> {
     let p = validate_path(&path, &state)?;
     fs::write(p, data).map_err(AppError::from)
 }
@@ -279,7 +313,10 @@ pub fn get_current_dir() -> AppResult<String> {
 
 /// Executes the get_files_in_dir command with sandbox verification.
 #[tauri::command]
-pub fn get_files_in_dir(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<Vec<FileInfo>> {
+pub fn get_files_in_dir(
+    path: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<Vec<FileInfo>> {
     let p = validate_path(&path, &state)?;
     let mut files = Vec::new();
     let entries = std::fs::read_dir(p).map_err(AppError::from)?;
@@ -305,7 +342,10 @@ pub fn get_files_in_dir(path: String, state: tauri::State<'_, AllowedPathsState>
 
 /// Executes the scan_dev_bloat command asynchronously.
 #[tauri::command]
-pub async fn scan_dev_bloat(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<Vec<BloatItem>> {
+pub async fn scan_dev_bloat(
+    path: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<Vec<BloatItem>> {
     let p = validate_path(&path, &state)?;
     let p_clone = p.to_string_lossy().to_string();
 
@@ -314,7 +354,7 @@ pub async fn scan_dev_bloat(path: String, state: tauri::State<'_, AllowedPathsSt
         let mut it = WalkDir::new(p_clone).into_iter();
         while let Some(Ok(entry)) = it.next() {
             let name = entry.file_name().to_string_lossy();
-            
+
             if name.starts_with('.') && name != "." && name != ".." {
                 if entry.file_type().is_dir() {
                     it.skip_current_dir();
@@ -322,20 +362,20 @@ pub async fn scan_dev_bloat(path: String, state: tauri::State<'_, AllowedPathsSt
                 continue;
             }
 
-            if entry.file_type().is_dir() {
-                if name == "node_modules" || name == "target" || name == "bin" || name == "obj" {
-                    let mut size_bytes = 0;
-                    for sub_entry in WalkDir::new(entry.path()).into_iter().flatten() {
-                        if let Ok(meta) = sub_entry.metadata() {
-                            size_bytes += meta.len();
-                        }
+            if entry.file_type().is_dir()
+                && (name == "node_modules" || name == "target" || name == "bin" || name == "obj")
+            {
+                let mut size_bytes = 0;
+                for sub_entry in WalkDir::new(entry.path()).into_iter().flatten() {
+                    if let Ok(meta) = sub_entry.metadata() {
+                        size_bytes += meta.len();
                     }
-                    bloat_items.push(BloatItem {
-                        path: entry.path().to_string_lossy().to_string(),
-                        size_mb: size_bytes / 1_000_000,
-                    });
-                    it.skip_current_dir();
                 }
+                bloat_items.push(BloatItem {
+                    path: entry.path().to_string_lossy().to_string(),
+                    size_mb: size_bytes / 1_000_000,
+                });
+                it.skip_current_dir();
             }
         }
         bloat_items
@@ -346,7 +386,10 @@ pub async fn scan_dev_bloat(path: String, state: tauri::State<'_, AllowedPathsSt
 
 /// Executes the purge_directories command with sandbox verification.
 #[tauri::command]
-pub async fn purge_directories(paths: Vec<String>, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
+pub async fn purge_directories(
+    paths: Vec<String>,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<()> {
     for path in &paths {
         let _ = validate_path(path, &state)?;
     }
@@ -403,7 +446,10 @@ pub async fn bulk_rename(
 
 /// Executes the find_duplicates command with sandbox verification.
 #[tauri::command]
-pub async fn find_duplicates(path: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<Vec<DuplicateGroup>> {
+pub async fn find_duplicates(
+    path: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<Vec<DuplicateGroup>> {
     let p = validate_path(&path, &state)?;
     let p_clone = p.to_string_lossy().to_string();
 
@@ -483,7 +529,11 @@ pub async fn find_duplicates(path: String, state: tauri::State<'_, AllowedPathsS
 
 /// Executes the copy_file command with sandbox verification.
 #[tauri::command]
-pub fn copy_file(source: String, dest: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
+pub fn copy_file(
+    source: String,
+    dest: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<()> {
     let p_src = validate_path(&source, &state)?;
     let p_dest = validate_path(&dest, &state)?;
     std::fs::copy(p_src, p_dest).map_err(AppError::from)?;
@@ -492,7 +542,11 @@ pub fn copy_file(source: String, dest: String, state: tauri::State<'_, AllowedPa
 
 /// Executes the move_file command with sandbox verification.
 #[tauri::command]
-pub fn move_file(source: String, dest: String, state: tauri::State<'_, AllowedPathsState>) -> AppResult<()> {
+pub fn move_file(
+    source: String,
+    dest: String,
+    state: tauri::State<'_, AllowedPathsState>,
+) -> AppResult<()> {
     let p_src = validate_path(&source, &state)?;
     let p_dest = validate_path(&dest, &state)?;
     std::fs::rename(p_src, p_dest).map_err(AppError::from)?;
@@ -643,7 +697,14 @@ pub async fn get_code_metrics(
 
                             if matches!(
                                 ext.as_str(),
-                                "rs" | "ts" | "tsx" | "js" | "jsx" | "css" | "html" | "json" | "toml"
+                                "rs" | "ts"
+                                    | "tsx"
+                                    | "js"
+                                    | "jsx"
+                                    | "css"
+                                    | "html"
+                                    | "json"
+                                    | "toml"
                             ) {
                                 if let Ok(mut file) = std::fs::File::open(&path) {
                                     use std::io::Read;
@@ -653,9 +714,10 @@ pub async fn get_code_metrics(
                                         if n == 0 {
                                             break;
                                         }
-                                        lines += buffer[..n].iter().filter(|&&b| b == b'\n').count() as u32;
+                                        lines += buffer[..n].iter().filter(|&&b| b == b'\n').count()
+                                            as u32;
                                     }
-                                    
+
                                     metrics.total_lines += lines;
                                     *metrics.languages.entry(ext).or_insert(0) += lines;
                                 }
