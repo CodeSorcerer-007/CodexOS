@@ -356,7 +356,7 @@ export const SettingsPage = () => {
               </div>
             </div>
             <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-full font-mono text-xs text-gray-300">
-              v2.1.0 (Current)
+              v2.2.0 (Current)
             </span>
           </div>
 
@@ -376,7 +376,7 @@ export const SettingsPage = () => {
               ) : updateResult && !updateResult.available ? (
                 <div className="flex items-center gap-1.5 text-green-400">
                   <CheckCircle2 size={14} />
-                  <span>CodexOS is up to date (v2.1.0)</span>
+                  <span>CodexOS is up to date (v2.2.0)</span>
                 </div>
               ) : (
                 <span className="text-gray-500">Check for verified package signatures</span>

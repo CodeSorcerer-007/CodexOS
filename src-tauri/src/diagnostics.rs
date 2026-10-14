@@ -76,7 +76,7 @@ pub fn init_panic_hook(app_data_dir: PathBuf) {
                 location: location_str,
                 os: std::env::consts::OS.to_string(),
                 arch: std::env::consts::ARCH.to_string(),
-                app_version: "2.1.0".to_string(),
+                app_version: env!("CARGO_PKG_VERSION").to_string(),
                 backtrace: backtrace_str,
             };
 
@@ -157,7 +157,7 @@ pub fn get_diagnostics_summary(
     let used_memory_mb = sys.used_memory() / 1024 / 1024;
 
     Ok(DiagnosticsSummary {
-        app_version: "2.1.0".to_string(),
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
         os_name: std::env::consts::OS.to_string(),
         os_arch: std::env::consts::ARCH.to_string(),
         cpu_count: sys.cpus().len(),

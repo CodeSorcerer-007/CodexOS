@@ -14,8 +14,8 @@ describe('updaterService', () => {
   test('returns available: true when an update is available', async () => {
     const mockUpdate = {
       available: true,
-      version: '2.2.0',
-      date: '2026-09-04',
+      version: '2.3.0',
+      date: '2026-10-15',
       body: 'Performance improvements and bug fixes',
       downloadAndInstall: vi.fn(),
     };
@@ -23,8 +23,8 @@ describe('updaterService', () => {
 
     const result = await checkForSoftwareUpdates();
     expect(result.available).toBe(true);
-    expect(result.version).toBe('2.2.0');
-    expect(result.currentVersion).toBe('2.1.0');
+    expect(result.version).toBe('2.3.0');
+    expect(result.currentVersion).toBe('2.2.0');
   });
 
   test('returns available: false when up to date', async () => {
@@ -32,7 +32,7 @@ describe('updaterService', () => {
 
     const result = await checkForSoftwareUpdates();
     expect(result.available).toBe(false);
-    expect(result.currentVersion).toBe('2.1.0');
+    expect(result.currentVersion).toBe('2.2.0');
   });
 
   test('handles network/offline errors gracefully', async () => {
