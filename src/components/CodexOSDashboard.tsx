@@ -1,21 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Database, Activity, HardDrive, Cpu, GitBranch, Key, Network, ShieldAlert, Box } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useStore } from '../store/store';
+import { useMetricsStore } from '../store/metricsStore';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import type { AppId } from '../types/apps';
 import { SIDEBAR_ITEMS } from './layout/Sidebar';
 
 interface DashboardProps {
   onOpenApp?: (app: AppId) => void;
-}
-
-interface SysStats {
-  cpu_usage: number;
-  mem_total: number;
-  mem_used: number;
-  drives: Array<{ name: string; mount_point: string; total_space: number; available_space: number }>;
 }
 
 interface GitStatus {
@@ -34,67 +28,81 @@ interface DockerContainerSummary {
 }
 
 export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
-  const [sysStats, setSysStats] = useState<SysStats | null>(null);
   const secretsCount = useStore(s => s.secretsCount);
   const activeTunnelCount = useStore(s => s.activeTunnelCount);
   const currentPath = useStore(s => s.currentPath);
   const peerCount = useStore(s => s.peerCount);
   const recentWorkspaces = useStore(s => s.settings.recentWorkspaces || []);
   const openWorkspace = useStore(s => s.openWorkspace);
+
+  // Centralized system telemetry store
+  const cpuUsage = useMetricsStore(s => s.cpuUsage);
+  const memTotal = useMetricsStore(s => s.memTotal);
+  const memUsed = useMetricsStore(s => s.memUsed);
+  const drives = useMetricsStore(s => s.drives);
+
+  const sysStats = useMemo(() => ({
+    cpu_usage: cpuUsage ?? 0,
+    mem_total: memTotal,
+    mem_used: memUsed,
+    drives,
+  }), [cpuUsage, memTotal, memUsed, drives]);
   
   const [gitModified, setGitModified] = useState<number | null>(null);
   const [dockerCount, setDockerCount] = useState<number | null>(null);
 
+  // Ensure telemetry is populated when mounting Dashboard
+  useEffect(() => {
+    useMetricsStore.getState().fetchMetrics();
+  }, []);
+
+  // Git status: queried only on workspace path change or on window focus
   useEffect(() => {
     let isMounted = true;
-
-    const fetchSys = async () => {
+    const fetchGit = async () => {
+      if (!currentPath) {
+        if (isMounted) setGitModified(null);
+        return;
+      }
       try {
-        const stats = await invoke<SysStats>('get_sys_stats');
-        if (isMounted) setSysStats(stats);
-      } catch (e: unknown) {
-        console.warn("Failed to fetch sys stats:", e);
+        const status = await invoke<GitStatus>('get_git_status', { path: currentPath });
+        if (isMounted) {
+          setGitModified(status.staged.length + status.unstaged.length + status.untracked.length);
+        }
+      } catch {
+        if (isMounted) setGitModified(null);
       }
     };
 
+    fetchGit();
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchGit();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [currentPath]);
+
+  // Docker status: queried once on mount; does not spin background intervals
+  useEffect(() => {
+    let isMounted = true;
     const fetchDocker = async () => {
       try {
         const containers = await invoke<DockerContainerSummary[]>('get_docker_containers');
         if (isMounted) setDockerCount(containers.length);
       } catch {
-        // Handled gracefully when Docker is offline or not yet loaded
+        if (isMounted) setDockerCount(null);
       }
     };
-
-    const fetchGit = async () => {
-      if (currentPath) {
-        try {
-          const status = await invoke<GitStatus>('get_git_status', { path: currentPath });
-          if (isMounted) {
-            setGitModified(status.staged.length + status.unstaged.length + status.untracked.length);
-          }
-        } catch {
-          if (isMounted) setGitModified(null);
-        }
-      } else {
-        if (isMounted) setGitModified(null);
-      }
-    };
-
-    const fetchAll = () => {
-      fetchSys();
-      fetchDocker();
-      fetchGit();
-    };
-
-    fetchAll();
-    const interval = setInterval(fetchAll, 2000);
-
+    fetchDocker();
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
-  }, [currentPath]);
+  }, []);
 
   const formatBytes = (bytes: number) => {
     if (bytes == null || isNaN(bytes)) return '—';
@@ -105,10 +113,10 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
 
   const [cpuHistory, setCpuHistory] = useState<{ value: number }[]>([]);
   useEffect(() => {
-    if (sysStats) {
-      setCpuHistory(prev => [...prev.slice(-19), { value: sysStats.cpu_usage }]);
+    if (cpuUsage !== null) {
+      setCpuHistory(prev => [...prev.slice(-19), { value: cpuUsage }]);
     }
-  }, [sysStats]);
+  }, [cpuUsage]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -155,7 +163,6 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
     };
   });
 
-  const drives = sysStats?.drives ?? [];
   const totalSpace = drives.reduce((acc, d) => acc + (d.total_space || 0), 0);
   const availableSpace = drives.reduce((acc, d) => acc + (d.available_space || 0), 0);
 

@@ -109,14 +109,58 @@ pub fn docker_action(container_id: String, action: String) -> AppResult<String> 
     }
 }
 
-/// Executes the stream_docker_logs command.
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
+
+pub struct DockerLogStreamState {
+    pub cancel_senders: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+}
+
+impl Default for DockerLogStreamState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DockerLogStreamState {
+    pub fn new() -> Self {
+        Self {
+            cancel_senders: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+/// Executes the stream_docker_logs command with cancellation support to prevent process leaks.
 #[tauri::command]
 pub async fn stream_docker_logs(
     app_handle: tauri::AppHandle,
     container_id: String,
     tail_lines: u32,
+    stream_state: tauri::State<'_, DockerLogStreamState>,
 ) -> AppResult<String> {
     let validated_id = validate_docker_id(&container_id)?;
+
+    // Abort previous stream for the same container if one exists
+    {
+        let mut map = stream_state
+            .cancel_senders
+            .lock()
+            .map_err(|_| AppError::Custom("Docker log state poisoned".into()))?;
+        if let Some(old_tx) = map.remove(validated_id) {
+            let _ = old_tx.send(());
+        }
+    }
+
+    let (cancel_tx, mut cancel_rx) = oneshot::channel();
+    {
+        let mut map = stream_state
+            .cancel_senders
+            .lock()
+            .map_err(|_| AppError::Custom("Docker log state poisoned".into()))?;
+        map.insert(validated_id.to_string(), cancel_tx);
+    }
+
     use tauri::Emitter;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
@@ -150,9 +194,21 @@ pub async fn stream_docker_logs(
     let event_clone = event_name.clone();
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            if app_handle_clone.emit(&event_clone, line).is_err() {
-                break;
+        loop {
+            tokio::select! {
+                _ = &mut cancel_rx => {
+                    break;
+                }
+                res = reader.next_line() => {
+                    match res {
+                        Ok(Some(line)) => {
+                            if app_handle_clone.emit(&event_clone, line).is_err() {
+                                break;
+                            }
+                        }
+                        _ => break,
+                    }
+                }
             }
         }
         let _ = child.kill().await;
@@ -166,6 +222,23 @@ pub async fn stream_docker_logs(
     });
 
     Ok("".to_string())
+}
+
+/// Executes the stop_docker_log_stream command to stop streaming logs and kill the child process.
+#[tauri::command]
+pub fn stop_docker_log_stream(
+    container_id: String,
+    stream_state: tauri::State<'_, DockerLogStreamState>,
+) -> AppResult<()> {
+    let validated_id = validate_docker_id(&container_id)?;
+    let mut map = stream_state
+        .cancel_senders
+        .lock()
+        .map_err(|_| AppError::Custom("Docker log state poisoned".into()))?;
+    if let Some(tx) = map.remove(validated_id) {
+        let _ = tx.send(());
+    }
+    Ok(())
 }
 
 pub fn parse_image_lines(stdout: &str) -> Vec<DockerImage> {

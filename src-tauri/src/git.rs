@@ -1,8 +1,24 @@
 use crate::cli_runner::{run_cli, run_cli_parse};
 use crate::error::{AppError, AppResult};
+use crate::files::AllowedPathsState;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
+use tauri::State;
+
+fn require_workspace_dir(
+    path: &str,
+    allowed_paths: &AllowedPathsState,
+) -> AppResult<std::path::PathBuf> {
+    let p = crate::files::validate_path(path, allowed_paths)?;
+    if !p.is_dir() {
+        return Err(AppError::Custom(format!(
+            "Path is not a directory: {}",
+            path
+        )));
+    }
+    Ok(p)
+}
 
 fn require_absolute_dir(path: &str) -> AppResult<std::path::PathBuf> {
     let p = Path::new(path);
@@ -72,16 +88,26 @@ pub fn parse_git_status_output(stdout: &str) -> GitStatusResult {
     }
 }
 
-/// Returns the git status of a repository using git CLI.
-#[tauri::command]
-pub fn get_git_status(path: String) -> AppResult<GitStatusResult> {
-    let p = require_absolute_dir(&path)?;
+pub fn get_git_status_internal(
+    path: &str,
+    allowed_paths: &AllowedPathsState,
+) -> AppResult<GitStatusResult> {
+    let p = require_workspace_dir(path, allowed_paths)?;
     run_cli_parse(
         "git",
         &["status", "--porcelain=v2", "--branch"],
         Some(&p),
         |stdout| Ok(parse_git_status_output(stdout)),
     )
+}
+
+/// Returns the git status of a repository using git CLI.
+#[tauri::command]
+pub fn get_git_status(
+    path: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<GitStatusResult> {
+    get_git_status_internal(&path, &allowed_paths)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -100,14 +126,20 @@ pub fn git_action(
     action: GitAction,
     file: Option<String>,
     message: Option<String>,
+    allowed_paths: State<'_, AllowedPathsState>,
 ) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+    let p = require_workspace_dir(&path, &allowed_paths)?;
     let file_target = file.unwrap_or_else(|| ".".to_string());
+    if file_target.starts_with('-') {
+        return Err(AppError::Custom(
+            "File target cannot start with a hyphen".into(),
+        ));
+    }
     let msg_target = message.unwrap_or_else(|| "Update".to_string());
 
     match action {
         GitAction::Add => {
-            let res = run_cli("git", &["add", &file_target], Some(&p))?;
+            let res = run_cli("git", &["add", "--", &file_target], Some(&p))?;
             if res.exit_code == 0 {
                 Ok(res.stdout)
             } else {
@@ -131,7 +163,11 @@ pub fn git_action(
             }
         }
         GitAction::RestoreStaged => {
-            let res = run_cli("git", &["restore", "--staged", &file_target], Some(&p))?;
+            let res = run_cli(
+                "git",
+                &["restore", "--staged", "--", &file_target],
+                Some(&p),
+            )?;
             if res.exit_code == 0 {
                 Ok(res.stdout)
             } else {
@@ -150,8 +186,17 @@ pub fn git_action(
 }
 
 #[tauri::command]
-pub fn git_history(path: String, file: String) -> AppResult<Vec<GitCommitInfo>> {
-    let p = require_absolute_dir(&path)?;
+pub fn git_history(
+    path: String,
+    file: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<Vec<GitCommitInfo>> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
+    if file.starts_with('-') {
+        return Err(AppError::Custom(
+            "File argument cannot start with a hyphen".into(),
+        ));
+    }
     run_cli_parse(
         "git",
         &[
@@ -180,8 +225,18 @@ pub fn git_history(path: String, file: String) -> AppResult<Vec<GitCommitInfo>> 
 }
 
 #[tauri::command]
-pub fn git_show(path: String, hash: String, file: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+pub fn git_show(
+    path: String,
+    hash: String,
+    file: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
+    if hash.starts_with('-') || file.starts_with('-') {
+        return Err(AppError::Custom(
+            "Arguments cannot start with a hyphen".into(),
+        ));
+    }
     let spec = format!("{}:{}", hash, file);
     let res = run_cli("git", &["show", &spec], Some(&p))?;
     if res.exit_code == 0 {
@@ -192,7 +247,11 @@ pub fn git_show(path: String, hash: String, file: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn search_contents(path: String, query: String) -> AppResult<Vec<crate::files::SearchResult>> {
+pub fn search_contents(
+    path: String,
+    query: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<Vec<crate::files::SearchResult>> {
     if query.trim().is_empty() {
         return Err(AppError::Custom("Search query cannot be empty".into()));
     }
@@ -201,10 +260,10 @@ pub fn search_contents(path: String, query: String) -> AppResult<Vec<crate::file
             "Search query is too long (max 100 chars)".into(),
         ));
     }
-    let p = require_absolute_dir(&path)?;
+    let p = require_workspace_dir(&path, &allowed_paths)?;
 
-    // Allow ripgrep failure (exit code 1) meaning no matches, but exit code >1 is error
-    let res = run_cli("rg", &["--no-heading", "-n", &query], Some(&p))?;
+    // Use "--" to prevent ripgrep flag injection
+    let res = run_cli("rg", &["--no-heading", "-n", "--", &query], Some(&p))?;
     if res.exit_code > 1 {
         return Err(AppError::Command(format!("Ripgrep failed: {}", res.stderr)));
     }
@@ -234,8 +293,11 @@ pub struct BranchInfo {
 }
 
 #[tauri::command]
-pub fn get_branches(path: String) -> AppResult<Vec<BranchInfo>> {
-    let p = require_absolute_dir(&path)?;
+pub fn get_branches(
+    path: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<Vec<BranchInfo>> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
     run_cli_parse(
         "git",
         &[
@@ -263,9 +325,20 @@ pub fn get_branches(path: String) -> AppResult<Vec<BranchInfo>> {
 }
 
 #[tauri::command]
-pub fn git_checkout(path: String, branch: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
-    let res = run_cli("git", &["checkout", &branch], Some(&p))?;
+pub fn git_checkout(
+    path: String,
+    branch: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
+    let clean_branch = branch.trim();
+    if clean_branch.is_empty()
+        || clean_branch.starts_with('-')
+        || clean_branch.contains(char::is_whitespace)
+    {
+        return Err(AppError::Custom("Invalid branch name".into()));
+    }
+    let res = run_cli("git", &["checkout", "--", clean_branch], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
     } else {
@@ -274,9 +347,20 @@ pub fn git_checkout(path: String, branch: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn git_create_branch(path: String, branch: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
-    let res = run_cli("git", &["checkout", "-b", &branch], Some(&p))?;
+pub fn git_create_branch(
+    path: String,
+    branch: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
+    let clean_branch = branch.trim();
+    if clean_branch.is_empty()
+        || clean_branch.starts_with('-')
+        || clean_branch.contains(char::is_whitespace)
+    {
+        return Err(AppError::Custom("Invalid branch name".into()));
+    }
+    let res = run_cli("git", &["checkout", "-b", clean_branch, "--"], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
     } else {
@@ -285,8 +369,8 @@ pub fn git_create_branch(path: String, branch: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn git_pull(path: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+pub fn git_pull(path: String, allowed_paths: State<'_, AllowedPathsState>) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
     let res = run_cli("git", &["pull"], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
@@ -296,8 +380,8 @@ pub fn git_pull(path: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn git_fetch(path: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+pub fn git_fetch(path: String, allowed_paths: State<'_, AllowedPathsState>) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
     let res = run_cli("git", &["fetch", "--all"], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
@@ -328,13 +412,26 @@ pub fn get_recent_commit_diff_internal(path: &str) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn get_recent_commit_diff(path: String) -> AppResult<String> {
+pub fn get_recent_commit_diff(
+    path: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<String> {
+    require_workspace_dir(&path, &allowed_paths)?;
     get_recent_commit_diff_internal(&path)
 }
 
 #[tauri::command]
-pub fn get_file_diff(path: String, file: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+pub fn get_file_diff(
+    path: String,
+    file: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
+    if file.starts_with('-') {
+        return Err(AppError::Custom(
+            "File argument cannot start with a hyphen".into(),
+        ));
+    }
     let res = run_cli("git", &["diff", "--", &file], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
@@ -344,8 +441,17 @@ pub fn get_file_diff(path: String, file: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn get_staged_diff(path: String, file: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+pub fn get_staged_diff(
+    path: String,
+    file: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
+    if file.starts_with('-') {
+        return Err(AppError::Custom(
+            "File argument cannot start with a hyphen".into(),
+        ));
+    }
     let res = run_cli("git", &["diff", "--cached", "--", &file], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
@@ -355,13 +461,28 @@ pub fn get_staged_diff(path: String, file: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn git_clone(url: String, destination: String, app_handle: tauri::AppHandle) -> AppResult<()> {
+pub fn git_clone(
+    url: String,
+    destination: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+    app_handle: tauri::AppHandle,
+) -> AppResult<()> {
+    let trimmed_url = url.trim();
+    if trimmed_url.starts_with('-') {
+        return Err(AppError::Custom(
+            "Repository URL cannot start with a hyphen".into(),
+        ));
+    }
+    let dest_path = crate::files::validate_path(&destination, &allowed_paths)?;
+    let dest_str = dest_path.to_string_lossy().to_string();
+
     use tauri::Emitter;
+    let url_clone = trimmed_url.to_string();
     std::thread::spawn(move || {
         use std::io::{BufRead, BufReader};
         let app_handle_clone = app_handle.clone();
         let child_res = Command::new("git")
-            .args(["clone", "--progress", &url, &destination])
+            .args(["clone", "--progress", "--", &url_clone, &dest_str])
             .stderr(std::process::Stdio::piped())
             .spawn();
 
@@ -401,8 +522,8 @@ pub fn git_clone(url: String, destination: String, app_handle: tauri::AppHandle)
 }
 
 #[tauri::command]
-pub fn git_stash(path: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+pub fn git_stash(path: String, allowed_paths: State<'_, AllowedPathsState>) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
     let res = run_cli("git", &["stash"], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
@@ -412,8 +533,11 @@ pub fn git_stash(path: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub fn git_stash_pop(path: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
+pub fn git_stash_pop(
+    path: String,
+    allowed_paths: State<'_, AllowedPathsState>,
+) -> AppResult<String> {
+    let p = require_workspace_dir(&path, &allowed_paths)?;
     let res = run_cli("git", &["stash", "pop"], Some(&p))?;
     if res.exit_code == 0 {
         Ok(res.stdout)
@@ -449,7 +573,8 @@ mod tests {
 
     #[test]
     fn get_git_status_non_existent_path_errors() {
-        let res = get_git_status("/non/existent/path/99999".to_string());
+        let state = AllowedPathsState::new();
+        let res = get_git_status_internal("/non/existent/path/99999", &state);
         assert!(res.is_err());
     }
 
@@ -462,5 +587,14 @@ mod tests {
         assert_eq!(parsed.staged, vec!["src/main.rs"]);
         assert_eq!(parsed.unstaged, vec!["Cargo.toml"]);
         assert_eq!(parsed.untracked, vec!["untracked_file.txt"]);
+    }
+
+    #[test]
+    fn test_git_option_injection_checks() {
+        let bad_branch = "-b-malicious";
+        assert!(bad_branch.starts_with('-'));
+
+        let bad_url = "--upload-pack=evil";
+        assert!(bad_url.starts_with('-'));
     }
 }

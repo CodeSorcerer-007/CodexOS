@@ -17,8 +17,7 @@ const DEFAULT_M_COST: u32 = 65536;
 const DEFAULT_T_COST: u32 = 3;
 const DEFAULT_P_COST: u32 = 1;
 
-#[tauri::command]
-pub fn encrypt_vault(path: String, password: String, out_path: String) -> AppResult<()> {
+pub fn encrypt_vault_internal(path: &str, password: &str, out_path: &str) -> AppResult<()> {
     if password.len() < crate::util::MIN_PASSWORD_LENGTH {
         return Err(crate::error::AppError::Vault(format!(
             "Password must be at least {} characters",
@@ -84,7 +83,7 @@ pub fn encrypt_vault(path: String, password: String, out_path: String) -> AppRes
     buffer.zeroize();
 
     // 3. Save: magic(4) + m_cost(4) + t_cost(4) + p_cost(4) + salt(16) + nonce(12) + ciphertext
-    let mut out_file = fs::File::create(&out_path).map_err(|e| e.to_string())?;
+    let mut out_file = fs::File::create(out_path).map_err(|e| e.to_string())?;
     out_file.write_all(VAULT_MAGIC).map_err(|e| e.to_string())?;
     out_file
         .write_all(&DEFAULT_M_COST.to_le_bytes())
@@ -102,14 +101,26 @@ pub fn encrypt_vault(path: String, password: String, out_path: String) -> AppRes
     Ok(())
 }
 
+/// Executes the encrypt_vault command with workspace sandbox verification.
 #[tauri::command]
-pub fn decrypt_vault(path: String, password: String, out_path: String) -> AppResult<()> {
+pub fn encrypt_vault(
+    path: String,
+    password: String,
+    out_path: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<()> {
+    crate::files::validate_path(&path, &allowed_paths)?;
+    crate::files::validate_path(&out_path, &allowed_paths)?;
+    encrypt_vault_internal(&path, &password, &out_path)
+}
+
+pub fn decrypt_vault_internal(path: &str, password: &str, out_path: &str) -> AppResult<()> {
     if password.is_empty() {
         return Err(crate::error::AppError::Vault(
             "Password cannot be empty".to_string(),
         ));
     }
-    let data = fs::read(&path).map_err(|e| e.to_string())?;
+    let data = fs::read(path).map_err(|e| e.to_string())?;
     if data.len() < 28 {
         return Err(crate::error::AppError::Vault(
             "Vault file is too small or corrupt".to_string(),
@@ -231,6 +242,19 @@ pub fn decrypt_vault(path: String, password: String, out_path: String) -> AppRes
     Ok(())
 }
 
+/// Executes the decrypt_vault command with workspace sandbox verification.
+#[tauri::command]
+pub fn decrypt_vault(
+    path: String,
+    password: String,
+    out_path: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<()> {
+    crate::files::validate_path(&path, &allowed_paths)?;
+    crate::files::validate_path(&out_path, &allowed_paths)?;
+    decrypt_vault_internal(&path, &password, &out_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,10 +273,10 @@ mod tests {
 
         let pass = "password12345".to_string();
 
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            pass.clone(),
-            vault_file.to_string_lossy().to_string(),
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            &pass,
+            &vault_file.to_string_lossy(),
         )
         .unwrap();
 
@@ -260,10 +284,10 @@ mod tests {
 
         fs::create_dir(&out_dir).unwrap();
 
-        decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            pass,
-            out_dir.to_string_lossy().to_string(),
+        decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            &pass,
+            &out_dir.to_string_lossy(),
         )
         .unwrap();
 
@@ -281,19 +305,19 @@ mod tests {
         fs::create_dir(&in_dir).unwrap();
         fs::write(in_dir.join("test.txt"), "hello world").unwrap();
 
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            "password12345".to_string(),
-            vault_file.to_string_lossy().to_string(),
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            "password12345",
+            &vault_file.to_string_lossy(),
         )
         .unwrap();
 
         fs::create_dir(&out_dir).unwrap();
 
-        let res = decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            "wrongpass123".to_string(),
-            out_dir.to_string_lossy().to_string(),
+        let res = decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            "wrongpass123",
+            &out_dir.to_string_lossy(),
         );
 
         assert!(res.is_err());
@@ -309,19 +333,19 @@ mod tests {
         fs::create_dir(&in_dir).unwrap();
 
         let pass = "password12345".to_string();
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            pass.clone(),
-            vault_file.to_string_lossy().to_string(),
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            &pass,
+            &vault_file.to_string_lossy(),
         )
         .unwrap();
 
         fs::create_dir(&out_dir).unwrap();
 
-        decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            pass,
-            out_dir.to_string_lossy().to_string(),
+        decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            &pass,
+            &out_dir.to_string_lossy(),
         )
         .unwrap();
 
@@ -342,19 +366,19 @@ mod tests {
 
         let pass = "password12345".to_string();
 
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            pass.clone(),
-            vault_file.to_string_lossy().to_string(),
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            &pass,
+            &vault_file.to_string_lossy(),
         )
         .unwrap();
 
         fs::create_dir(&out_dir).unwrap();
 
-        decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            pass,
-            out_dir.to_string_lossy().to_string(),
+        decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            &pass,
+            &out_dir.to_string_lossy(),
         )
         .unwrap();
 

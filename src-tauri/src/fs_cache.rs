@@ -67,18 +67,46 @@ pub fn watch_directory(
     watchers.insert(path.to_string(), watcher);
 
     thread::spawn(move || {
-        for res in rx {
+        let debounce_duration = std::time::Duration::from_millis(250);
+        let mut last_emit = std::time::Instant::now() - debounce_duration;
+
+        while let Ok(res) = rx.recv() {
+            let mut pending = false;
             match res {
                 Ok(event) => {
                     if let notify::EventKind::Modify(_)
                     | notify::EventKind::Create(_)
                     | notify::EventKind::Remove(_) = event.kind
                     {
-                        use tauri::Emitter;
-                        let _ = app_handle.emit("fs-change", &path_clone);
+                        pending = true;
                     }
                 }
                 Err(e) => log::error!("watch error: {:?}", e),
+            }
+
+            // Drain any queued events that arrived concurrently
+            while let Ok(res) = rx.try_recv() {
+                if let Ok(event) = res {
+                    if let notify::EventKind::Modify(_)
+                    | notify::EventKind::Create(_)
+                    | notify::EventKind::Remove(_) = event.kind
+                    {
+                        pending = true;
+                    }
+                }
+            }
+
+            if pending {
+                if last_emit.elapsed() >= debounce_duration {
+                    use tauri::Emitter;
+                    let _ = app_handle.emit("fs-change", &path_clone);
+                    last_emit = std::time::Instant::now();
+                } else {
+                    std::thread::sleep(debounce_duration.saturating_sub(last_emit.elapsed()));
+                    use tauri::Emitter;
+                    let _ = app_handle.emit("fs-change", &path_clone);
+                    last_emit = std::time::Instant::now();
+                }
             }
         }
     });

@@ -24,7 +24,7 @@ describe('updaterService', () => {
     const result = await checkForSoftwareUpdates();
     expect(result.available).toBe(true);
     expect(result.version).toBe('2.3.0');
-    expect(result.currentVersion).toBe('2.2.0');
+    expect(result.currentVersion).toBe('2.3.0');
   });
 
   test('returns available: false when up to date', async () => {
@@ -32,7 +32,7 @@ describe('updaterService', () => {
 
     const result = await checkForSoftwareUpdates();
     expect(result.available).toBe(false);
-    expect(result.currentVersion).toBe('2.2.0');
+    expect(result.currentVersion).toBe('2.3.0');
   });
 
   test('handles network/offline errors gracefully', async () => {

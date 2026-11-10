@@ -213,11 +213,29 @@ pub fn list_wsl_distros() -> AppResult<Vec<String>> {
     )
 }
 
-/// Executes the get_project_tasks command.
+/// Executes the get_project_tasks command with workspace sandbox verification.
 #[tauri::command]
-pub fn get_project_tasks(path: String) -> AppResult<HashMap<String, String>> {
+pub fn get_project_tasks_internal(
+    path: &str,
+    allowed_paths: Option<&crate::files::AllowedPathsState>,
+) -> AppResult<HashMap<String, String>> {
+    let p = if let Some(state) = allowed_paths {
+        crate::files::validate_path(path, state)?
+    } else {
+        let p = std::path::PathBuf::from(path);
+        if !p.is_absolute() {
+            return Err(AppError::Custom(format!("Path must be absolute: {}", path)));
+        }
+        p
+    };
+    if !p.is_dir() {
+        return Err(AppError::Custom(format!(
+            "Path is not a directory: {}",
+            path
+        )));
+    }
     let mut tasks = HashMap::new();
-    let root = std::path::Path::new(&path);
+    let root = p;
 
     // 1. package.json
     let pkg_path = root.join("package.json");
@@ -276,6 +294,15 @@ pub fn get_project_tasks(path: String) -> AppResult<HashMap<String, String>> {
     }
 
     Ok(tasks)
+}
+
+/// Executes the get_project_tasks command with workspace sandbox verification.
+#[tauri::command]
+pub fn get_project_tasks(
+    path: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<HashMap<String, String>> {
+    get_project_tasks_internal(&path, Some(&allowed_paths))
 }
 
 fn get_hosts_path() -> &'static str {
@@ -339,13 +366,17 @@ pub fn write_hosts(content: String) -> AppResult<()> {
     }
 }
 
-/// Executes the install_font command.
+/// Executes the install_font command with workspace sandbox verification.
 #[tauri::command]
-pub fn install_font(path: String) -> AppResult<String> {
-    let font_path = std::path::Path::new(&path);
-    if !font_path.exists() || !font_path.is_file() {
+pub fn install_font(
+    path: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<String> {
+    let validated = crate::files::validate_path(&path, &allowed_paths)?;
+    if !validated.exists() || !validated.is_file() {
         return Err(AppError::Custom("Font file does not exist".into()));
     }
+    let font_path = validated;
     let ext = font_path
         .extension()
         .and_then(|e| e.to_str())
@@ -464,7 +495,7 @@ mod tests {
         )
         .unwrap();
 
-        let tasks = get_project_tasks(dir.path().to_string_lossy().to_string()).unwrap();
+        let tasks = get_project_tasks_internal(&dir.path().to_string_lossy(), None).unwrap();
         assert_eq!(tasks.get("build").unwrap(), "tsc");
         assert_eq!(tasks.get("test").unwrap(), "vitest");
     }
@@ -482,7 +513,7 @@ mod tests {
         let make_file = dir.path().join("Makefile");
         std::fs::write(&make_file, "all:\n\techo all\nclean:\n\trm -rf target\n").unwrap();
 
-        let tasks = get_project_tasks(dir.path().to_string_lossy().to_string()).unwrap();
+        let tasks = get_project_tasks_internal(&dir.path().to_string_lossy(), None).unwrap();
         assert!(tasks.contains_key("cargo:build"));
         assert!(tasks.contains_key("cargo:test"));
         assert!(tasks.contains_key("make:all"));
