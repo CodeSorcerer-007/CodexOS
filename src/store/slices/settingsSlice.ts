@@ -2,6 +2,8 @@ import type { StateCreator } from 'zustand';
 import type { DashboardState } from '../store';
 import { addAllowedPath, kvGet, kvSet } from '../../ipc';
 
+export type PerformanceMode = 'lightweight' | 'balanced' | 'developer';
+
 export interface AppSettings {
   defaultPath: string;
   terminalShell: 'powershell' | 'cmd' | 'wsl';
@@ -12,6 +14,11 @@ export interface AppSettings {
   memorySpikeWindowSec: number;
   sidebarCollapsed: boolean;
   proxyWhitelist: string[];
+  performanceMode: PerformanceMode;
+  monitoringEnabled: boolean;
+  searchIndexingEnabled?: boolean;
+  searchMaxFileSizeMb?: number;
+  searchCustomExclusions?: string[];
 }
 
 const SETTINGS_STORAGE_KEY = 'codexos-settings';
@@ -26,6 +33,11 @@ export const defaultSettings: AppSettings = {
   memorySpikeWindowSec: 10,
   sidebarCollapsed: false,
   proxyWhitelist: ['127.0.0.1', 'localhost'],
+  performanceMode: 'lightweight',
+  monitoringEnabled: true,
+  searchIndexingEnabled: false,
+  searchMaxFileSizeMb: 10,
+  searchCustomExclusions: ['node_modules', '.git', 'target', 'dist', 'build', '.next', '.cache', 'vendor'],
 };
 
 export function loadSettings(): AppSettings {
@@ -54,6 +66,8 @@ export interface SettingsSlice {
   setAiCopilotEnabled: (value: boolean) => void;
   setMemorySpikeThresholdMb: (value: number) => void;
   setMemorySpikeWindowSec: (value: number) => void;
+  setPerformanceMode: (mode: PerformanceMode) => void;
+  setMonitoringEnabled: (enabled: boolean) => void;
   openWorkspace: (path: string, name: string) => void;
   hydrateSettingsFromSqlite: () => Promise<void>;
 }
@@ -95,6 +109,18 @@ export const createSettingsSlice: StateCreator<DashboardState, [], [], SettingsS
 
   setMemorySpikeWindowSec: (value) => set((state) => {
     const updated = { ...state.settings, memorySpikeWindowSec: value };
+    saveSettings(updated);
+    return { settings: updated };
+  }),
+
+  setPerformanceMode: (mode) => set((state) => {
+    const updated = { ...state.settings, performanceMode: mode };
+    saveSettings(updated);
+    return { settings: updated };
+  }),
+
+  setMonitoringEnabled: (enabled) => set((state) => {
+    const updated = { ...state.settings, monitoringEnabled: enabled };
     saveSettings(updated);
     return { settings: updated };
   }),

@@ -19,19 +19,24 @@ import {
   PanelRight24Regular,
   Add24Regular,
   ArrowSort24Regular,
+  ArrowUndo24Regular,
+  History24Regular,
   Desktop24Regular,
   Document24Regular,
   Folder24Filled
 } from '@fluentui/react-icons';
 import { useFileGridContext } from './FileGridContext';
+import { useSearchStore } from '../../store/searchStore';
 
 export const FileGridHeader = () => {
   const {
-    goBack, canGoBack, goForward, canGoForward, navigateUp, isThisPC,
+    currentPath, goBack, canGoBack, goForward, canGoForward, navigateUp, isThisPC,
     loadFiles, onNavigate, segments, navigateToSegment, search, setSearch,
     showNewMenu, setShowNewMenu, showSortMenu, setShowSortMenu,
     showViewMenu, setShowViewMenu, setIsCreating, setNewItemName,
     selectedFiles, setRenamingPath, setRenameValue, handleDelete,
+    handleCutSelected, handleCopySelected, handlePaste, clipboard,
+    handleUndo, isUndoing, setHistoryModalOpen, loadOperationHistory,
     viewMode, setViewMode, sidebarCollapsed, setSidebarCollapsed
   } = useFileGridContext();
 
@@ -76,15 +81,39 @@ export const FileGridHeader = () => {
         </div>
 
         {/* Search Box */}
-        <div className="flex items-center bg-[#2c2c2c] border border-[rgba(255,255,255,0.1)] rounded-md px-2.5 h-8 w-[240px] focus-within:border-[#60cdff] focus-within:bg-[#1a1a1a] transition-colors">
+        <div className="flex items-center bg-[#2c2c2c] border border-[rgba(255,255,255,0.1)] rounded-md px-2 h-8 w-[260px] focus-within:border-[#60cdff] focus-within:bg-[#1a1a1a] transition-colors gap-1">
           <input 
+            id="file-grid-folder-search"
             type="text" 
-            placeholder={isThisPC ? "Search This PC" : `Search ${segments[segments.length - 1] || 'folder'}`} 
+            placeholder={isThisPC ? "Search This PC (Ctrl+F)" : `Search ${segments[segments.length - 1] || 'folder'} (Ctrl+F)`} 
             value={search}
             onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && search.trim()) {
+                e.preventDefault();
+                const store = useSearchStore.getState();
+                store.openSearch(currentPath, segments[segments.length - 1] || 'Current Folder');
+                store.setQuery(search);
+                store.executeSearch();
+              }
+            }}
             className="bg-transparent border-none outline-none text-[13px] text-[#e0e0e0] placeholder-[#767676] flex-1 min-w-0" 
           />
-          <Search24Regular className="text-[#767676] ml-1 flex-shrink-0"/>
+          <button
+            onClick={() => {
+              const store = useSearchStore.getState();
+              store.openSearch(currentPath, segments[segments.length - 1] || 'Current Folder');
+              if (search.trim()) {
+                store.setQuery(search);
+                store.executeSearch();
+              }
+            }}
+            className="w-5 h-5 rounded flex items-center justify-center text-[#767676] hover:text-[#60cdff] hover:bg-white/10 transition-colors"
+            title="Open Advanced Global Search (Ctrl+Shift+F)"
+            aria-label="Advanced Global Search"
+          >
+            <Search24Regular className="text-current"/>
+          </button>
         </div>
       </div>
       
@@ -122,12 +151,32 @@ export const FileGridHeader = () => {
 
            <div className="w-px h-4 bg-[rgba(255,255,255,0.1)] mx-1"></div>
            
-           <button className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Cut (Ctrl+X)" disabled={selectedFiles.size === 0}><Cut24Regular/></button>
-           <button className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Copy (Ctrl+C)" disabled={selectedFiles.size === 0}><Copy24Regular/></button>
-           <button className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Paste (Ctrl+V)"><Clipboard24Regular/></button>
+           <button onClick={() => handleCutSelected()} className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Cut (Ctrl+X)" disabled={selectedFiles.size === 0}><Cut24Regular/></button>
+           <button onClick={() => handleCopySelected()} className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Copy (Ctrl+C)" disabled={selectedFiles.size === 0}><Copy24Regular/></button>
+           <button onClick={() => handlePaste()} className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Paste (Ctrl+V)" disabled={!clipboard || clipboard.paths.length === 0}><Clipboard24Regular/></button>
            <button onClick={() => { if (selectedFiles.size === 1) { setRenamingPath(Array.from(selectedFiles)[0]); setRenameValue(Array.from(selectedFiles)[0].split(/[\\/]/).pop() || ''); } }} className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Rename (F2)" disabled={selectedFiles.size !== 1}><Rename24Regular/></button>
            <button className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" title="Share" disabled={selectedFiles.size === 0}><Share24Regular/></button>
            <button onClick={() => { if (selectedFiles.size > 0) handleDelete(Array.from(selectedFiles)[0]); }} className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,100,100,0.15)] hover:text-[#ff6b6b] disabled:opacity-30 transition-colors" title="Delete (Del)" disabled={selectedFiles.size === 0}><Delete24Regular/></button>
+           
+           <div className="w-px h-4 bg-[rgba(255,255,255,0.1)] mx-1"></div>
+
+           <button 
+             onClick={handleUndo} 
+             disabled={isUndoing} 
+             className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] disabled:opacity-30 transition-colors" 
+             title="Undo last file operation (Ctrl+Z)"
+             aria-label="Undo file operation"
+           >
+             <ArrowUndo24Regular className={isUndoing ? "animate-spin" : ""} />
+           </button>
+           <button 
+             onClick={() => { setHistoryModalOpen(true); loadOperationHistory(); }} 
+             className="p-1.5 rounded text-[#ababab] hover:bg-[rgba(255,255,255,0.08)] hover:text-[#e0e0e0] transition-colors" 
+             title="View file operation history"
+             aria-label="View file operation history"
+           >
+             <History24Regular />
+           </button>
         </div>
         
         <div className="flex items-center gap-1">

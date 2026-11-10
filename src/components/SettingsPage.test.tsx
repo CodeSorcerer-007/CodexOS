@@ -20,6 +20,8 @@ describe('SettingsPage', () => {
         sidebarCollapsed: false,
         recentWorkspaces: [],
         proxyWhitelist: ['127.0.0.1', 'localhost'],
+        performanceMode: 'lightweight',
+        monitoringEnabled: true,
       }
     });
   });

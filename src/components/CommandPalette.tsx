@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, ArrowRight } from 'lucide-react';
+import { Search, ArrowRight, RotateCcw, History } from 'lucide-react';
 import { useStore } from '../store/store';
+import { useSearchStore } from '../store/searchStore';
 import { NAVIGATION_ITEMS, type NavigationItem } from '../config/navigation';
 
 export const CommandPalette = () => {
@@ -24,6 +25,51 @@ export const CommandPalette = () => {
     group: 'Modules',
   }));
 
+  const fileActionItems = [
+    {
+      id: 'action-file-undo',
+      label: 'File: Undo Last Operation (Ctrl+Z)',
+      icon: <RotateCcw className="w-4 h-4 text-emerald-400" />,
+      action: () => {
+        setActiveApp('files');
+        setIsOpen(false);
+        setSearch('');
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('codexos:file-undo'));
+        }, 50);
+      },
+      group: 'File Operations',
+    },
+    {
+      id: 'action-file-search',
+      label: 'File: Advanced Search (Ctrl+Shift+F)',
+      icon: <Search className="w-4 h-4 text-cyan-400" />,
+      action: () => {
+        setActiveApp('files');
+        setIsOpen(false);
+        setSearch('');
+        setTimeout(() => {
+          useSearchStore.getState().openSearch('', 'Global Search');
+        }, 50);
+      },
+      group: 'File Operations',
+    },
+    {
+      id: 'action-file-history',
+      label: 'File: View Operation History',
+      icon: <History className="w-4 h-4 text-sky-400" />,
+      action: () => {
+        setActiveApp('files');
+        setIsOpen(false);
+        setSearch('');
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('codexos:open-history'));
+        }, 50);
+      },
+      group: 'File Operations',
+    },
+  ];
+
   const workspaceItems = recentWorkspaces.map(w => ({
     id: `workspace-${w.path}`,
     label: `Switch Workspace: ${w.name}`,
@@ -37,7 +83,7 @@ export const CommandPalette = () => {
     group: 'Workspaces',
   }));
 
-  const allItems = [...items, ...workspaceItems];
+  const allItems = [...items, ...fileActionItems, ...workspaceItems];
 
   const filteredItems = allItems.filter((i) => i.label.toLowerCase().includes(search.toLowerCase()));
 
