@@ -71,6 +71,31 @@ pub const MIGRATIONS: &[Migration] = &[
             );
         "#,
     },
+    Migration {
+        version: 4,
+        description: "Workspace search metadata index and workspace status tracking",
+        up_sql: r#"
+            CREATE TABLE IF NOT EXISTS workspace_search_index (
+                path TEXT PRIMARY KEY,
+                workspace_root TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                extension TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                modified_secs INTEGER NOT NULL,
+                is_dir INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_search_workspace_root ON workspace_search_index(workspace_root);
+            CREATE INDEX IF NOT EXISTS idx_search_filename ON workspace_search_index(filename);
+            CREATE INDEX IF NOT EXISTS idx_search_extension ON workspace_search_index(extension);
+
+            CREATE TABLE IF NOT EXISTS indexed_workspaces (
+                workspace_path TEXT PRIMARY KEY,
+                last_indexed INTEGER NOT NULL,
+                file_count INTEGER NOT NULL,
+                status TEXT NOT NULL
+            );
+        "#,
+    },
 ];
 
 pub fn get_user_version(conn: &Connection) -> Result<u32> {
@@ -162,8 +187,8 @@ mod tests {
         assert_eq!(get_user_version(&conn).unwrap(), 0);
 
         let version = run_migrations(&mut conn).unwrap();
-        assert_eq!(version, 3);
-        assert_eq!(get_user_version(&conn).unwrap(), 3);
+        assert_eq!(version, 4);
+        assert_eq!(get_user_version(&conn).unwrap(), 4);
 
         // Verify tables exist
         conn.execute(
@@ -180,18 +205,28 @@ mod tests {
             [],
         )
         .unwrap();
+        conn.execute(
+            "INSERT INTO workspace_search_index (path, workspace_root, filename, extension, size_bytes, modified_secs, is_dir) VALUES ('/a/b.rs', '/a', 'b.rs', 'rs', 100, 1000, 0)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO indexed_workspaces (workspace_path, last_indexed, file_count, status) VALUES ('/a', 1000, 1, 'ready')",
+            [],
+        )
+        .unwrap();
 
         let status = get_migration_status(&conn).unwrap();
         assert!(status.is_up_to_date);
-        assert_eq!(status.applied_migrations.len(), 3);
+        assert_eq!(status.applied_migrations.len(), 4);
     }
 
     #[test]
     fn test_migrations_idempotency() {
         let mut conn = Connection::open_in_memory().unwrap();
         run_migrations(&mut conn).unwrap();
-        // Second run should be a no-op and return version 3
+        // Second run should be a no-op and return version 4
         let version2 = run_migrations(&mut conn).unwrap();
-        assert_eq!(version2, 3);
+        assert_eq!(version2, 4);
     }
 }
