@@ -1,6 +1,7 @@
 import { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -10,6 +11,7 @@ import { kvSet, getApiVersion, addAllowedPath } from './ipc';
 import { ToastContainer } from './components/ToastContainer';
 import { Sidebar } from './components/layout/Sidebar';
 import { AppRouter } from './components/layout/AppRouter';
+import { startMetricsPolling } from './store/metricsStore';
 
 import { DeveloperStatusBar } from './components/layout/DeveloperStatusBar';
 
@@ -19,6 +21,7 @@ import { KeyboardHelp } from './components/KeyboardHelp';
 import { OnboardingWizard } from './components/OnboardingWizard';
 import { VaultUnlock } from './components/VaultUnlock';
 import { CommandPalette } from './components/CommandPalette';
+import { TransferCenter } from './components/TransferCenter/TransferCenter';
 
 import { Minus, Square, Copy, X, Search, Sun, Moon, HelpCircle, FolderGit2, GitBranch } from 'lucide-react';
 
@@ -50,6 +53,46 @@ function App() {
   // Read addToast directly from the store for a stable reference that never
   // changes between renders, avoiding spurious effect re-runs.
   const addToast = useStore(state => state.addToast);
+
+  // Centralized system telemetry lifecycle
+  useEffect(() => {
+    const stopMetrics = startMetricsPolling();
+    return () => {
+      stopMetrics();
+    };
+  }, []);
+
+  // Single-instance and CLI folder navigation
+  useEffect(() => {
+    let active = true;
+    let unlistenFn: (() => void) | undefined;
+
+    listen<string[]>('open-cli-paths', (event) => {
+      const paths = event.payload;
+      if (!Array.isArray(paths) || paths.length === 0) return;
+
+      const { openPathInTab, addToast } = useStore.getState();
+      for (const p of paths) {
+        openPathInTab(p);
+      }
+      addToast({
+        type: 'info',
+        title: 'Folder Opened',
+        message: paths.length === 1 ? paths[0] : `${paths.length} folders opened in tabs`,
+      });
+    }).then((fn) => {
+      if (active) {
+        unlistenFn = fn;
+      } else {
+        fn();
+      }
+    });
+
+    return () => {
+      active = false;
+      unlistenFn?.();
+    };
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -151,7 +194,7 @@ function App() {
           >
             <span className="text-[11px] font-bold text-app-text-muted tracking-wider uppercase shrink-0">CodexOS</span>
             <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded text-[9px] bg-indigo-500/15 text-indigo-400 font-mono font-semibold border border-indigo-500/20 shrink-0">
-              v2.2.0
+              v2.3.0
             </span>
             {currentPath && (
               <span className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded bg-black/10 dark:bg-white/5 border border-app-border text-[10px] text-app-text-muted font-mono truncate max-w-xs">
@@ -260,6 +303,7 @@ function App() {
       <VaultUnlock />
       <CommandPalette />
       <ToastContainer />
+      <TransferCenter />
       {showOnboarding && (
         <OnboardingWizard onComplete={handleOnboardingComplete} />
       )}

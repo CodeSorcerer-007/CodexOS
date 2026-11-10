@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "CodexOS",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "identifier": "com.codexos.app",
   "build": {
     "frontendDist": "../dist",
@@ -47,7 +47,18 @@
       "timestampUrl": null,
       "nsis": {
         "installMode": "currentUser",
-        "displayLanguageSelector": false
+        "displayLanguageSelector": false,
+        "installerHooks": "nsis-hooks.nsh"
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "15f8b186-2dae-5f37-b454-1ee147d51c1b",
+        "fragmentPaths": [
+          "wix/cleanup.wxs"
+        ],
+        "componentRefs": [
+          "CleanupCodexOSRegistry"
+        ]
       }
     },
     "android": {

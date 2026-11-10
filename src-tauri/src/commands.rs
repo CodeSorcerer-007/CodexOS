@@ -3,12 +3,14 @@
 // caught at compile time and each command's origin is traceable at a glance.
 use crate::{
     ai, archive, crypto_tools, db, devdocs, diagnostics, docker, files, fs_cache, git, hmac_vault,
-    kv, multiplexer, plugin, ports, proxy, secrets, ssh, sys, system_tools, tunnel, vault,
+    kv, multiplexer, plugin, ports, proxy, search, secrets, ssh, sys, system_tools, tunnel, vault,
+    windows_integration,
 };
 
 pub fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     builder.invoke_handler(tauri::generate_handler![
         files::get_drives,
+        files::get_user_home_dir,
         files::read_file_text,
         files::write_file_text,
         files::create_file,
@@ -27,6 +29,7 @@ pub fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wr
         multiplexer::resize_multiplex_pty,
         multiplexer::write_multiplex_pty,
         multiplexer::kill_multiplex_pty,
+        multiplexer::kill_all_ptys,
         proxy::start_proxy,
         proxy::stop_proxy,
         proxy::is_proxy_running,
@@ -46,6 +49,8 @@ pub fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wr
         plugin::run_wasi_nano_vm,
         plugin::execute_marketplace_plugin,
         sys::get_sys_stats,
+        sys::get_cpu_mem_stats,
+        sys::refresh_disks,
         sys::get_api_version,
         sys::get_top_processes_memory,
         sys::get_gpu_info,
@@ -90,6 +95,7 @@ pub fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wr
         docker::get_docker_containers,
         docker::docker_action,
         docker::stream_docker_logs,
+        docker::stop_docker_log_stream,
         docker::get_docker_images,
         docker::docker_pull_image,
         docker::docker_remove_image,
@@ -131,14 +137,35 @@ pub fn register(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wr
         crypto_tools::optimize_image,
         files::copy_file,
         files::move_file,
+        files::check_file_conflicts,
+        files::execute_file_transfer,
+        files::cancel_file_transfer,
+        files::get_active_transfers,
+        files::compare_file_contents,
+        files::generate_unique_name,
         system_tools::install_font,
         ports::execute_http_request,
         crypto_tools::inspect_ssl_cert,
         files::delete_file,
+        files::permanent_delete_file,
+        files::undo_last_file_operation,
+        files::get_file_operation_history,
         ai::query_ollama,
         ai::diagnose_issue,
         ai::is_copilot_configured,
         fs_cache::start_fs_watch,
-        fs_cache::stop_fs_watch
+        fs_cache::stop_fs_watch,
+        windows_integration::get_windows_integration_status,
+        windows_integration::register_context_menu,
+        windows_integration::unregister_context_menu,
+        windows_integration::set_windows_startup,
+        windows_integration::restore_windows_defaults,
+        windows_integration::generate_registry_scripts,
+        search::start_file_search,
+        search::cancel_file_search,
+        search::parse_query_preview,
+        search::get_search_index_status,
+        search::reindex_workspace,
+        search::clear_search_index
     ])
 }

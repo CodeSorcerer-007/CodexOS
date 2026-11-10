@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "2.2.0"
+version = "2.3.0"
 description = "CodexOS — The Ultimate Offline Developer OS"
 authors = ["CodeSorcerer-007"]
 license = "MIT"
@@ -61,6 +61,10 @@ hyper = { version = "0.14", features = ["full"] }
 hyper-tls = "0.5"
 aes-gcm = "0.10"
 tiny_http = "0.12"
+tauri-plugin-single-instance = "2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
 
 [dev-dependencies]
 proptest = "1.5.0"

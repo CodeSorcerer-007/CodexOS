@@ -1,6 +1,6 @@
 use app_lib::files::AllowedPathsState;
 use app_lib::proxy::is_ssrf_blocked;
-use app_lib::vault::{decrypt_vault, encrypt_vault};
+use app_lib::vault::{decrypt_vault_internal, encrypt_vault_internal};
 use tempfile::tempdir;
 
 #[test]
@@ -90,20 +90,20 @@ fn test_vault_encryption_roundtrip_with_strong_password() {
     let password = "super-secret-vault-password-2026".to_string();
 
     // Encrypt
-    let enc_result = encrypt_vault(
-        src_dir.to_string_lossy().to_string(),
-        password.clone(),
-        vault_file.to_string_lossy().to_string(),
+    let enc_result = encrypt_vault_internal(
+        &src_dir.to_string_lossy(),
+        &password,
+        &vault_file.to_string_lossy(),
     );
     assert!(enc_result.is_ok(), "Encryption should succeed");
     assert!(vault_file.exists(), "Vault file must be created on disk");
 
     // Decrypt
     std::fs::create_dir_all(&dest_dir).unwrap();
-    let dec_result = decrypt_vault(
-        vault_file.to_string_lossy().to_string(),
-        password,
-        dest_dir.to_string_lossy().to_string(),
+    let dec_result = decrypt_vault_internal(
+        &vault_file.to_string_lossy(),
+        &password,
+        &dest_dir.to_string_lossy(),
     );
     assert!(dec_result.is_ok(), "Decryption should succeed");
 
