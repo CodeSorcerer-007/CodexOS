@@ -1,50 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   GitBranch, CheckCircle2, Terminal, Cpu, Layers,
   Radio, Keyboard, Code2, AlertCircle, AlertTriangle
 } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { invoke } from '@tauri-apps/api/core';
-
-interface SysStats {
-  cpu_usage: number;
-  mem_total: number;
-  mem_used: number;
-}
+import { useMetricsStore } from '../../store/metricsStore';
 
 export const DeveloperStatusBar: React.FC = () => {
   const activeApp = useStore((s) => s.activeApp);
   const setActiveApp = useStore((s) => s.setActiveApp);
   const currentPath = useStore((s) => s.currentPath);
   const setShowKeyboardHelp = useStore((s) => s.setShowKeyboardHelp);
-  const [cpuUsage, setCpuUsage] = useState<number | null>(null);
-  const [memPercent, setMemPercent] = useState<number | null>(null);
+  const performanceMode = useStore((s) => s.settings.performanceMode || 'lightweight');
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchTelemetry = async () => {
-      try {
-        const stats = await invoke<SysStats>('get_sys_stats');
-        if (isMounted && stats) {
-          if (!isNaN(stats.cpu_usage)) {
-            setCpuUsage(stats.cpu_usage);
-          }
-          if (stats.mem_total > 0 && stats.mem_used >= 0) {
-            setMemPercent(Math.round((stats.mem_used / stats.mem_total) * 100));
-          }
-        }
-      } catch {
-        // Fallback for mocked or offline backend
-      }
-    };
-
-    fetchTelemetry();
-    const interval = setInterval(fetchTelemetry, 3000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  const cpuUsage = useMetricsStore((s) => s.cpuUsage);
+  const memPercent = useMetricsStore((s) => s.memPercent);
 
   const workspaceName = currentPath
     ? currentPath.split(/[/\\]/).filter(Boolean).pop() || currentPath
@@ -113,7 +83,10 @@ export const DeveloperStatusBar: React.FC = () => {
       {/* Right side: Telemetry, Platform, Encoding, Help */}
       <div className="flex items-center gap-3">
         {(cpuUsage !== null || memPercent !== null) && (
-          <div className="hidden sm:flex items-center gap-2" title="System Telemetry">
+          <div className="hidden sm:flex items-center gap-2" title={`System Telemetry (${performanceMode} mode)`}>
+            <span className="text-[10px] px-1 rounded bg-black/10 dark:bg-white/10 text-app-text-muted capitalize">
+              {performanceMode}
+            </span>
             {cpuUsage !== null && (
               <span className="flex items-center gap-1">
                 <Cpu className="w-3 h-3 text-blue-400" />
