@@ -1,19 +1,23 @@
+use crate::cli_runner::{run_cli, run_cli_parse};
 use crate::error::{AppError, AppResult};
 use crate::files::FileInfo;
-use crate::cli_runner::{run_cli, run_cli_parse};
-use std::process::{Command, Stdio};
 use std::io::Write;
+use std::process::{Command, Stdio};
 
 const MAX_SSH_READ_BYTES: usize = 10 * 1024 * 1024;
 
 fn validate_connection(connection: &str) -> AppResult<()> {
     let trimmed = connection.trim();
     if trimmed.starts_with('-') {
-        return Err(AppError::Custom("Invalid SSH connection string: Flags are not permitted.".to_string()));
+        return Err(AppError::Custom(
+            "Invalid SSH connection string: Flags are not permitted.".to_string(),
+        ));
     }
     if trimmed.is_empty() || trimmed.contains(|c: char| c.is_whitespace() || ";|&$`<>".contains(c))
     {
-        return Err(AppError::Custom("Invalid SSH connection target format.".to_string()));
+        return Err(AppError::Custom(
+            "Invalid SSH connection target format.".to_string(),
+        ));
     }
     Ok(())
 }
@@ -128,11 +132,7 @@ pub fn ssh_read_file_text(connection: String, path: String) -> AppResult<String>
 
 /// Writes text content to a remote file via SSH.
 #[tauri::command]
-pub fn ssh_write_file_text(
-    connection: String,
-    path: String,
-    content: String,
-) -> AppResult<()> {
+pub fn ssh_write_file_text(connection: String, path: String, content: String) -> AppResult<()> {
     validate_connection(&connection)?;
     let safe_path = escape_shell_arg(&path);
 
@@ -164,6 +164,173 @@ pub fn ssh_write_file_text(
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
         return Err(AppError::Command(format!("SSH Error: {}", err)));
+    }
+
+    Ok(())
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct SshKeypairInfo {
+    pub key_id: String,
+    pub key_type: String,
+    pub public_key: String,
+    pub public_key_path: String,
+    pub private_key_path: String,
+    pub comment: String,
+    pub created_at: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct SshKeySummary {
+    pub key_id: String,
+    pub key_type: String,
+    pub public_key: String,
+    pub public_key_path: String,
+    pub private_key_path: String,
+    pub comment: String,
+}
+
+pub fn get_ssh_dir() -> std::path::PathBuf {
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_else(|_| ".".to_string());
+    std::path::PathBuf::from(home).join(".ssh")
+}
+
+/// Generates a new SSH keypair using standard ssh-keygen.
+#[tauri::command]
+pub fn generate_ssh_keypair(
+    key_type: Option<String>,
+    bits: Option<u32>,
+    comment: Option<String>,
+) -> AppResult<SshKeypairInfo> {
+    let k_type = key_type
+        .unwrap_or_else(|| "ed25519".to_string())
+        .to_lowercase();
+    if k_type != "ed25519" && k_type != "rsa" && k_type != "ecdsa" {
+        return Err(AppError::Custom(
+            "Unsupported key type. Allowed: ed25519, rsa, ecdsa".to_string(),
+        ));
+    }
+
+    let comment_str = comment.unwrap_or_else(|| "codexos".to_string());
+    if comment_str.contains(|c: char| c.is_control() || ";|&$`<>\"'".contains(c)) {
+        return Err(AppError::Custom(
+            "Invalid characters in SSH key comment".to_string(),
+        ));
+    }
+
+    let ssh_dir = get_ssh_dir();
+    if !ssh_dir.exists() {
+        let _ = std::fs::create_dir_all(&ssh_dir);
+    }
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let key_id = format!("id_{}_codexos_{}", k_type, timestamp);
+    let private_path = ssh_dir.join(&key_id);
+    let public_path = ssh_dir.join(format!("{}.pub", key_id));
+
+    let mut cmd = Command::new("ssh-keygen");
+    cmd.arg("-t").arg(&k_type);
+    if k_type == "rsa" {
+        let b = bits.unwrap_or(4096).clamp(2048, 8192);
+        cmd.arg("-b").arg(b.to_string());
+    }
+    cmd.arg("-C").arg(&comment_str);
+    cmd.arg("-f").arg(&private_path);
+    cmd.arg("-N").arg(""); // Empty passphrase for default developer key
+
+    let output = cmd.output().map_err(|e| {
+        AppError::Custom(format!(
+            "Failed to execute ssh-keygen: {}. Ensure OpenSSH is installed.",
+            e
+        ))
+    })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::Custom(format!("ssh-keygen failed: {}", stderr)));
+    }
+
+    let public_key = std::fs::read_to_string(&public_path)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    Ok(SshKeypairInfo {
+        key_id,
+        key_type: k_type,
+        public_key,
+        public_key_path: public_path.to_string_lossy().to_string(),
+        private_key_path: private_path.to_string_lossy().to_string(),
+        comment: comment_str,
+        created_at: timestamp.to_string(),
+    })
+}
+
+/// Lists all available public SSH keys in ~/.ssh
+#[tauri::command]
+pub fn list_ssh_keys() -> AppResult<Vec<SshKeySummary>> {
+    let ssh_dir = get_ssh_dir();
+    let mut keys = Vec::new();
+
+    if !ssh_dir.exists() {
+        return Ok(keys);
+    }
+
+    if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("pub") {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    let trimmed = content.trim();
+                    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+                    let key_type = parts.first().copied().unwrap_or("unknown").to_string();
+                    let comment = parts.get(2).copied().unwrap_or("").to_string();
+                    let key_id = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("unknown")
+                        .to_string();
+                    let private_path = ssh_dir.join(&key_id);
+
+                    keys.push(SshKeySummary {
+                        key_id,
+                        key_type,
+                        public_key: trimmed.to_string(),
+                        public_key_path: path.to_string_lossy().to_string(),
+                        private_key_path: private_path.to_string_lossy().to_string(),
+                        comment,
+                    });
+                }
+            }
+        }
+    }
+
+    keys.sort_by(|a, b| a.key_id.cmp(&b.key_id));
+    Ok(keys)
+}
+
+/// Deletes an SSH key pair by key_id
+#[tauri::command]
+pub fn delete_ssh_key(key_id: String) -> AppResult<()> {
+    if key_id.is_empty() || key_id.contains(|c: char| !c.is_alphanumeric() && c != '_' && c != '-')
+    {
+        return Err(AppError::Custom("Invalid key ID format".to_string()));
+    }
+
+    let ssh_dir = get_ssh_dir();
+    let private_path = ssh_dir.join(&key_id);
+    let public_path = ssh_dir.join(format!("{}.pub", key_id));
+
+    if private_path.exists() {
+        let _ = std::fs::remove_file(private_path);
+    }
+    if public_path.exists() {
+        let _ = std::fs::remove_file(public_path);
     }
 
     Ok(())

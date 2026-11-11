@@ -3,28 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::State;
 
-fn require_absolute_dir(path: &str) -> AppResult<std::path::PathBuf> {
-    let p = std::path::Path::new(path);
-    if !p.is_absolute() {
-        return Err(format!("Path must be absolute: {}", path).into());
-    }
-    if !p.is_dir() {
-        return Err(format!("Path is not a directory: {}", path).into());
-    }
-    Ok(p.to_path_buf())
-}
-
-fn require_absolute_file(path: &str) -> AppResult<std::path::PathBuf> {
-    let p = std::path::Path::new(path);
-    if !p.is_absolute() {
-        return Err(format!("Path must be absolute: {}", path).into());
-    }
-    if !p.is_file() {
-        return Err(format!("Path is not a file: {}", path).into());
-    }
-    Ok(p.to_path_buf())
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct PortInfo {
     pub port: String,
@@ -129,18 +107,41 @@ fn lock_poison_recover<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     }
 }
 
-/// Executes the kill_process command.
+/// Executes the kill_process command with safety guards against terminating critical system processes or self.
 #[tauri::command]
 pub fn kill_process(pid: String) -> AppResult<String> {
     use std::process::Command;
 
     let trimmed_pid = pid.trim();
     if trimmed_pid.is_empty() || !trimmed_pid.chars().all(|c| c.is_ascii_digit()) {
-        return Err(AppError::Custom("Invalid process ID: PID must be numeric digits only".to_string()));
+        return Err(AppError::Custom(
+            "Invalid process ID: PID must be numeric digits only".to_string(),
+        ));
+    }
+
+    let pid_num = trimmed_pid
+        .parse::<u32>()
+        .map_err(|_| AppError::Custom("Invalid process ID: Overflow".to_string()))?;
+
+    // Protect system PIDs (0=System Idle, 4=System on Windows)
+    if pid_num <= 4 {
+        return Err(AppError::Custom(
+            "Operation rejected: Cannot terminate critical system process (PID <= 4)".to_string(),
+        ));
+    }
+
+    // Protect self
+    let current_pid = std::process::id();
+    if pid_num == current_pid {
+        return Err(AppError::Custom(
+            "Operation rejected: Cannot terminate CodexOS host process from UI".to_string(),
+        ));
     }
 
     let output = if cfg!(target_os = "windows") {
-        Command::new("taskkill").args(["/F", "/PID", trimmed_pid]).output()
+        Command::new("taskkill")
+            .args(["/F", "/PID", trimmed_pid])
+            .output()
     } else {
         Command::new("kill").args(["-9", trimmed_pid]).output()
     }
@@ -153,11 +154,20 @@ pub fn kill_process(pid: String) -> AppResult<String> {
     }
 }
 
-/// Executes the spawn_local_server command.
-#[tauri::command]
-pub fn spawn_local_server(path: String) -> AppResult<String> {
-    let p = require_absolute_dir(&path)?;
-    let base_canonical = p.canonicalize().map_err(|e| format!("Failed to resolve directory: {}", e))?;
+pub fn spawn_local_server_internal(
+    path: &str,
+    paths_state: &crate::files::AllowedPathsState,
+) -> AppResult<String> {
+    let p = crate::files::validate_path(path, paths_state)?;
+    if !p.is_dir() {
+        return Err(AppError::Custom(format!(
+            "Path is not a directory: {}",
+            path
+        )));
+    }
+    let base_canonical = p
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve directory: {}", e))?;
     use std::thread;
     use tiny_http::{Response, Server};
 
@@ -172,7 +182,9 @@ pub fn spawn_local_server(path: String) -> AppResult<String> {
         }
     }
     let server = bound_server.ok_or_else(|| {
-        AppError::Custom("Failed to bind local server: all ports in range 8080-8099 are in use".to_string())
+        AppError::Custom(
+            "Failed to bind local server: all ports in range 8080-8099 are in use".to_string(),
+        )
     })?;
 
     thread::spawn(move || {
@@ -200,22 +212,34 @@ pub fn spawn_local_server(path: String) -> AppResult<String> {
                 }
             }
 
-            let _ = request
-                .respond(Response::from_string("404 Not Found").with_status_code(404));
+            let _ = request.respond(Response::from_string("404 Not Found").with_status_code(404));
         }
     });
 
     Ok(format!("http://127.0.0.1:{}", bound_port))
 }
 
-/// Executes the start_tail_log command.
+/// Executes the spawn_local_server command with workspace sandbox verification.
+#[tauri::command]
+pub fn spawn_local_server(
+    path: String,
+    paths_state: State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<String> {
+    spawn_local_server_internal(&path, &paths_state)
+}
+
+/// Executes the start_tail_log command with workspace sandbox verification.
 #[tauri::command]
 pub async fn start_tail_log(
     window: tauri::Window,
     path: String,
     state: State<'_, TailState>,
+    paths_state: State<'_, crate::files::AllowedPathsState>,
 ) -> AppResult<()> {
-    let p = require_absolute_file(&path)?;
+    let p = crate::files::validate_path(&path, &paths_state)?;
+    if !p.is_file() {
+        return Err(AppError::Custom(format!("Path is not a file: {}", path)));
+    }
     use futures::stream::StreamExt;
     use linemux::MuxedLines;
     use tauri::Emitter;
@@ -265,9 +289,9 @@ pub async fn execute_http_request(
     method: String,
     body: Option<String>,
 ) -> AppResult<String> {
-    let parsed_url: hyper::Uri = url
-        .parse()
-        .map_err(|e: hyper::http::uri::InvalidUri| AppError::Custom(format!("Invalid URL: {}", e)))?;
+    let parsed_url: hyper::Uri = url.parse().map_err(|e: hyper::http::uri::InvalidUri| {
+        AppError::Custom(format!("Invalid URL: {}", e))
+    })?;
     let host = parsed_url.host().unwrap_or("").to_string();
 
     if crate::proxy::is_ssrf_blocked(&host, &[]) {
@@ -314,20 +338,17 @@ mod tests {
 
     #[test]
     fn test_require_absolute_paths() {
+        let state = crate::files::AllowedPathsState::new();
         let rel_path = "some/relative/path";
-        assert!(require_absolute_dir(rel_path).is_err());
-        assert!(require_absolute_file(rel_path).is_err());
+        assert!(crate::files::validate_path(rel_path, &state).is_err());
 
         #[cfg(target_os = "windows")]
         let abs_path = "C:\\nonexistent\\dir\\path";
         #[cfg(not(target_os = "windows"))]
         let abs_path = "/nonexistent/dir/path";
 
-        let err_dir = require_absolute_dir(abs_path);
+        let err_dir = crate::files::validate_path(abs_path, &state);
         assert!(err_dir.is_err());
-
-        let err_file = require_absolute_file(abs_path);
-        assert!(err_file.is_err());
     }
 
     #[test]
@@ -335,6 +356,10 @@ mod tests {
         assert!(kill_process("".to_string()).is_err());
         assert!(kill_process("abc".to_string()).is_err());
         assert!(kill_process("123; rm -rf /".to_string()).is_err());
+        // Protected PIDs
+        assert!(kill_process("0".to_string()).is_err());
+        assert!(kill_process("4".to_string()).is_err());
+        assert!(kill_process(std::process::id().to_string()).is_err());
     }
 
     #[test]
@@ -354,6 +379,7 @@ mod tests {
 
     #[test]
     fn test_spawn_local_server_relative_path() {
-        assert!(spawn_local_server("relative/dir".to_string()).is_err());
+        let state = crate::files::AllowedPathsState::new();
+        assert!(spawn_local_server_internal("relative/dir", &state).is_err());
     }
 }

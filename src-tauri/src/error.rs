@@ -1,6 +1,6 @@
 use serde::Serialize;
-use thiserror::Error;
 use std::sync::PoisonError;
+use thiserror::Error;
 
 #[derive(Error, Debug, Serialize)]
 pub enum AppError {
@@ -43,7 +43,6 @@ impl From<std::io::Error> for AppError {
         AppError::Io(err.to_string())
     }
 }
-
 
 impl From<rusqlite::Error> for AppError {
     fn from(err: rusqlite::Error) -> Self {

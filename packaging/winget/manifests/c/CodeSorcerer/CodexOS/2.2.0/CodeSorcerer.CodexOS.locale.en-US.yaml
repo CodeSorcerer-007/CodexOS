@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: CodeSorcerer.CodexOS
+PackageVersion: 2.2.0
+PackageLocale: en-US
+Publisher: CodeSorcerer
+PublisherUrl: https://github.com/CodeSorcerer-007
+PublisherSupportUrl: https://github.com/CodeSorcerer-007/CodexOS/issues
+PrivacyUrl: https://github.com/CodeSorcerer-007/CodexOS/blob/main/SECURITY.md
+Author: CodeSorcerer
+PackageName: CodexOS
+PackageUrl: https://github.com/CodeSorcerer-007/CodexOS
+License: MIT
+LicenseUrl: https://github.com/CodeSorcerer-007/CodexOS/blob/main/LICENSE
+Copyright: Copyright (c) 2026 CodeSorcerer
+ShortDescription: Privacy-first offline developer desktop operating environment and native control center
+Description: |-
+  CodexOS is a next-generation desktop developer environment and system control center engineered from the ground up for speed, local privacy, and deep native OS capabilities. Built with Tauri 2.0, Rust, and React 19, CodexOS provides high-density hardware telemetry, visual Git, terminal multiplexer, encrypted secrets vault, sandboxed WASM plugins, CRDT collaborative editing, and AI diagnostics.
+Moniker: codexos
+Tags:
+  - developer-tools
+  - offline-first
+  - terminal
+  - git
+  - devops
+  - security
+  - tauri
+  - rust
+ReleaseNotes: |-
+  CodexOS v2.2.0 Release Highlights:
+  - Live Host Telemetry Dashboard integration
+  - Universal Semantic Design Tokens & Theme Adaptation (Light/Dark)
+  - End-to-End Automated Verification Suites
+  - Sandboxed WASM Plugin Registry & Multi-Node Workflow Execution Engine
+  - WebRTC STUN/TURN Traversal & Remote SSH Keypair Management
+  - Cryptographic Microbenchmarks and Security Auditing
+ReleaseNotesUrl: https://github.com/CodeSorcerer-007/CodexOS/releases/tag/v2.2.0
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

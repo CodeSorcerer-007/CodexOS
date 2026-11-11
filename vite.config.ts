@@ -52,6 +52,5 @@ export default defineConfig({
     exclude: ['e2e/**', 'node_modules/**'],
     testTimeout: 30000,
     fileParallelism: false,
-    maxWorkers: 1,
   },
 })

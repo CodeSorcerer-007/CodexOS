@@ -1,0 +1,31 @@
+Windows Registry Editor Version 5.00
+
+; ==============================================================================
+; CodexOS — Windows Explorer Context Menu Registration (Per-User HKCU)
+; Safe, non-destructive, requires NO Administrator privileges.
+; Clean rollback script available at: scripts/unregister-context-menu.reg
+; ==============================================================================
+
+; 1. Right-click on any Folder in Windows Explorer
+[HKEY_CURRENT_USER\Software\Classes\Directory\shell\CodexOS]
+@="Open with CodexOS"
+"Icon"="\"%LOCALAPPDATA%\\Programs\\CodexOS\\CodexOS.exe\""
+
+[HKEY_CURRENT_USER\Software\Classes\Directory\shell\CodexOS\command]
+@="\"%LOCALAPPDATA%\\Programs\\CodexOS\\CodexOS.exe\" \"%V\""
+
+; 2. Right-click on empty background inside any Directory
+[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\CodexOS]
+@="Open in CodexOS"
+"Icon"="\"%LOCALAPPDATA%\\Programs\\CodexOS\\CodexOS.exe\""
+
+[HKEY_CURRENT_USER\Software\Classes\Directory\Background\shell\CodexOS\command]
+@="\"%LOCALAPPDATA%\\Programs\\CodexOS\\CodexOS.exe\" \"%V\""
+
+; 3. Right-click on any Drive root (e.g. C:\, D:\)
+[HKEY_CURRENT_USER\Software\Classes\Drive\shell\CodexOS]
+@="Open with CodexOS"
+"Icon"="\"%LOCALAPPDATA%\\Programs\\CodexOS\\CodexOS.exe\""
+
+[HKEY_CURRENT_USER\Software\Classes\Drive\shell\CodexOS\command]
+@="\"%LOCALAPPDATA%\\Programs\\CodexOS\\CodexOS.exe\" \"%V\""

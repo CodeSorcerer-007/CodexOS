@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="TARGETDIR">
+      <!-- 
+        MSI Independent Uninstallation Cleanup Component
+        Ensures MSI uninstallation cleanly removes only CodexOS-owned HKCU
+        context menu registrations and startup entries without affecting any
+        unrelated user configuration or registry keys.
+      -->
+      <Component Id="CleanupCodexOSRegistry" Guid="7f58540b-74b8-47c3-8ef2-4874cbebe4f5" Win64="yes">
+        <!-- KeyPath for per-user component inside machine/per-user installation -->
+        <RegistryValue Root="HKCU" Key="Software\codexos\CodexOS" Name="MsiRegistryCleanup" Type="integer" Value="1" KeyPath="yes" />
+        
+        <!-- Explorer Context Menus: Only remove the CodexOS subkeys -->
+        <RemoveRegistryKey Root="HKCU" Key="Software\Classes\Directory\shell\CodexOS" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKCU" Key="Software\Classes\Directory\Background\shell\CodexOS" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKCU" Key="Software\Classes\Drive\shell\CodexOS" Action="removeOnUninstall" />
+        
+        <!-- Windows Startup: Remove only the CodexOS value, leaving Run key intact -->
+        <RemoveRegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="CodexOS" />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

@@ -3,9 +3,10 @@ import { FileGridHeader } from './FileGridHeader';
 import { FileGridSidebar } from './FileGridSidebar';
 import { FileGridMain } from './FileGridMain';
 import { FileGridFooter } from './FileGridFooter';
+import { GlobalSearchModal } from '../Search/GlobalSearchModal';
 
 const FileGridInner = () => {
-  const { setSelectedFiles, setLastSelected } = useFileGridContext();
+  const { setSelectedFiles, setLastSelected, onNavigate, onFileDoubleClicked } = useFileGridContext();
   return (
     <div 
       className="flex flex-col h-full w-full bg-[#191919] text-[#e0e0e0] font-['Segoe_UI_Variable_Text','Segoe_UI',sans-serif] select-none selection:bg-[#3867d6]/30" 
@@ -17,6 +18,10 @@ const FileGridInner = () => {
         <FileGridMain />
       </div>
       <FileGridFooter />
+      <GlobalSearchModal
+        onNavigateToPath={(path) => onNavigate(path)}
+        onOpenFile={(path) => onFileDoubleClicked?.(path)}
+      />
     </div>
   );
 };

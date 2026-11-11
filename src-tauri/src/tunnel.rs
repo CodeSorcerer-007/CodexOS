@@ -15,6 +15,12 @@ pub struct TunnelState {
     pub tunnels: Arc<Mutex<HashMap<u16, TunnelProcess>>>,
 }
 
+impl Default for TunnelState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TunnelState {
     pub fn new() -> Self {
         TunnelState {
@@ -38,7 +44,9 @@ pub fn start_tunnel(
     custom_relay: Option<String>,
 ) -> AppResult<TunnelInfo> {
     if local_port == 0 {
-        return Err(AppError::Custom("Port must be between 1 and 65535".to_string()));
+        return Err(AppError::Custom(
+            "Port must be between 1 and 65535".to_string(),
+        ));
     }
 
     let mut tunnels = match state.tunnels.lock() {
@@ -46,13 +54,18 @@ pub fn start_tunnel(
         Err(poisoned) => poisoned.into_inner(),
     };
     if tunnels.contains_key(&local_port) {
-        return Err(AppError::Custom(format!("Port {} is already tunneled.", local_port)));
+        return Err(AppError::Custom(format!(
+            "Port {} is already tunneled.",
+            local_port
+        )));
     }
 
     let relay_target = match custom_relay {
         Some(ref r) if !r.trim().is_empty() => {
             let trimmed = r.trim();
-            if trimmed.starts_with('-') || trimmed.contains(|c: char| c.is_whitespace() || ";|&$`<>".contains(c)) {
+            if trimmed.starts_with('-')
+                || trimmed.contains(|c: char| c.is_whitespace() || ";|&$`<>".contains(c))
+            {
                 return Err(AppError::Custom("Invalid custom relay format".to_string()));
             }
             trimmed.to_string()
@@ -80,13 +93,16 @@ pub fn start_tunnel(
             ))
         })?;
 
-    let stdout = child.stdout.take().ok_or(AppError::Custom("Failed to capture stdout".to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or(AppError::Custom("Failed to capture stdout".to_string()))?;
 
     // Read on a background thread with a strict 10s timeout to prevent locking Tauri command thread
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines().flatten() {
+        for line in reader.lines().map_while(Result::ok) {
             if line.contains("serveo.net") || line.contains("Forwarding") {
                 if let Some(url_start) = line.find("http") {
                     let _ = tx.send(line[url_start..].trim().to_string());
@@ -128,7 +144,9 @@ pub fn start_tunnel(
 #[tauri::command]
 pub fn stop_tunnel(state: tauri::State<'_, TunnelState>, local_port: u16) -> AppResult<()> {
     if local_port == 0 {
-        return Err(AppError::Custom("Port must be between 1 and 65535".to_string()));
+        return Err(AppError::Custom(
+            "Port must be between 1 and 65535".to_string(),
+        ));
     }
 
     let mut tunnels = match state.tunnels.lock() {

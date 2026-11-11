@@ -36,7 +36,7 @@ export const FileGridSidebar = () => {
             {quickAccessItems.map(item => {
               const isActive = currentPath === item.path;
               return (
-                <li key={item.path}>
+                <li key={item.path || item.label}>
                   <button 
                     onClick={() => onNavigate(item.path)}
                     title={item.label}

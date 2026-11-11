@@ -21,7 +21,7 @@ export type ProgressCallback = (progress: {
  * Gracefully handles offline environments, development mode, and missing endpoints.
  */
 export async function checkForSoftwareUpdates(): Promise<UpdateCheckResult> {
-  const currentVersion = '2.1.0';
+  const currentVersion = '2.3.0';
 
   try {
     const update = await check();

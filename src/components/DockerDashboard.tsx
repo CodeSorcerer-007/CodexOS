@@ -1,22 +1,20 @@
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { useToast } from '../store/store';
+import { useStore, useToast } from '../store/store';
 
 import type { DockerContainer } from '../types/bindings/DockerContainer';
 import type { DockerImage } from '../types/bindings/DockerImage';
 import type { ContainerStats } from '../types/bindings/ContainerStats';
 
-// Import xterm
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import '@xterm/xterm/css/xterm.css';
+import type { Terminal } from '@xterm/xterm';
 
 import { DockerContainerList } from './docker/DockerContainerList';
 import { DockerContainerDetail } from './docker/DockerContainerDetail';
 import { DockerImageList } from './docker/DockerImageList';
 
 export const DockerDashboard = memo(() => {
+  const theme = useStore(s => s.settings.theme);
   const [activeTab, setActiveTab] = useState<'containers' | 'images'>('containers');
   const [containers, setContainers] = useState<DockerContainer[]>([]);
   const [images, setImages] = useState<DockerImage[]>([]);
@@ -101,17 +99,37 @@ export const DockerDashboard = memo(() => {
 
   useEffect(() => {
     initialLoad();
-    const interval = setInterval(() => {
-      fetchContainers();
-      if (activeTab === 'images') fetchImages();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let isCancelled = false;
 
-      // Update stats if selected container is running
-      if (selectedContainer && selectedContainer.state.toLowerCase() === 'running') {
-        fetchStats(selectedContainer.id);
+    const poll = async () => {
+      if (isCancelled) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        timer = setTimeout(poll, 10000);
+        return;
       }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [activeTab, selectedContainer, initialLoad, fetchContainers, fetchImages, fetchStats]);
+
+      await fetchContainers();
+      if (activeTab === 'images') {
+        await fetchImages();
+      }
+
+      if (selectedContainer && selectedContainer.state.toLowerCase() === 'running') {
+        await fetchStats(selectedContainer.id);
+      }
+
+      const delay = dockerError ? 15000 : 5000;
+      if (!isCancelled) {
+        timer = setTimeout(poll, delay);
+      }
+    };
+
+    timer = setTimeout(poll, 5000);
+    return () => {
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeTab, selectedContainer, initialLoad, fetchContainers, fetchImages, fetchStats, dockerError]);
 
   useEffect(() => {
     if (selectedContainer) {
@@ -160,28 +178,64 @@ export const DockerDashboard = memo(() => {
     }
   }, [selectedContainer, isStreaming]);
 
+  const getTerminalTheme = (isLight: boolean) => isLight ? {
+    background: '#ffffff',
+    foreground: '#0f172a',
+    cursor: '#0284c7',
+  } : {
+    background: '#000000',
+    foreground: '#e2e8f0',
+  };
+
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = getTerminalTheme(theme === 'light');
+    }
+  }, [theme]);
+
   useEffect(() => {
     if (!terminalContainerRef.current) return;
-    const term = new Terminal({
-      theme: { background: '#000000', foreground: '#e2e8f0' },
-      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-      fontSize: 13,
-      convertEol: true,
-    });
-    const fitAddon = new FitAddon();
-    term.loadAddon(fitAddon);
-    term.open(terminalContainerRef.current);
-    fitAddon.fit();
-    termRef.current = term;
+    let isDisposed = false;
+    let termInstance: Terminal | null = null;
+    let resizeHandler: (() => void) | null = null;
 
-    const handleResize = () => fitAddon.fit();
-    window.addEventListener('resize', handleResize);
+    Promise.all([
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit'),
+      import('@xterm/xterm/css/xterm.css')
+    ]).then(([{ Terminal }, { FitAddon }]) => {
+      if (isDisposed || !terminalContainerRef.current) return;
+      const isInitialLight = useStore.getState().settings.theme === 'light';
+      const term = new Terminal({
+        theme: getTerminalTheme(isInitialLight),
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+        fontSize: 13,
+        convertEol: true,
+      });
+      const fitAddon = new FitAddon();
+      term.loadAddon(fitAddon);
+      term.open(terminalContainerRef.current);
+      fitAddon.fit();
+      termRef.current = term;
+      termInstance = term;
+
+      resizeHandler = () => fitAddon.fit();
+      window.addEventListener('resize', resizeHandler);
+    }).catch(e => {
+      console.error('[CodexOS] Failed to load xterm for Docker log terminal:', e);
+    });
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      term.dispose();
+      isDisposed = true;
+      if (resizeHandler) {
+        window.removeEventListener('resize', resizeHandler);
+      }
+      if (termInstance) {
+        termInstance.dispose();
+      }
+      termRef.current = null;
     };
-  }, []);
+  }, [selectedContainer]);
 
   const handlePullImage = async () => {
     if (!pullImageName) return;

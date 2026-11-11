@@ -1,5 +1,5 @@
-use crate::error::{AppError, AppResult};
 use crate::cli_runner::{run_cli, run_cli_parse};
+use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use ts_rs::TS;
@@ -35,10 +35,16 @@ pub struct ContainerStats {
 fn validate_docker_id(id: &str) -> AppResult<&str> {
     let trimmed = id.trim();
     if trimmed.is_empty() || trimmed.starts_with('-') || trimmed.len() > 256 {
-        return Err(AppError::Custom("Invalid Docker identifier format".to_string()));
+        return Err(AppError::Custom(
+            "Invalid Docker identifier format".to_string(),
+        ));
     }
-    if !trimmed.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-' || c == ':' || c == '/') {
-        return Err(AppError::Custom("Docker identifier contains disallowed characters".to_string()));
+    if !trimmed.chars().all(|c| {
+        c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-' || c == ':' || c == '/'
+    }) {
+        return Err(AppError::Custom(
+            "Docker identifier contains disallowed characters".to_string(),
+        ));
     }
     Ok(trimmed)
 }
@@ -96,17 +102,65 @@ pub fn docker_action(container_id: String, action: String) -> AppResult<String> 
     args.push(validated_id);
 
     let res = run_cli("docker", &args, None)?;
-    if res.exit_code == 0 { Ok(res.stdout) } else { Err(AppError::Command(res.stderr)) }
+    if res.exit_code == 0 {
+        Ok(res.stdout)
+    } else {
+        Err(AppError::Command(res.stderr))
+    }
 }
 
-/// Executes the stream_docker_logs command.
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
+
+pub struct DockerLogStreamState {
+    pub cancel_senders: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+}
+
+impl Default for DockerLogStreamState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DockerLogStreamState {
+    pub fn new() -> Self {
+        Self {
+            cancel_senders: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+/// Executes the stream_docker_logs command with cancellation support to prevent process leaks.
 #[tauri::command]
 pub async fn stream_docker_logs(
     app_handle: tauri::AppHandle,
     container_id: String,
     tail_lines: u32,
+    stream_state: tauri::State<'_, DockerLogStreamState>,
 ) -> AppResult<String> {
     let validated_id = validate_docker_id(&container_id)?;
+
+    // Abort previous stream for the same container if one exists
+    {
+        let mut map = stream_state
+            .cancel_senders
+            .lock()
+            .map_err(|_| AppError::Custom("Docker log state poisoned".into()))?;
+        if let Some(old_tx) = map.remove(validated_id) {
+            let _ = old_tx.send(());
+        }
+    }
+
+    let (cancel_tx, mut cancel_rx) = oneshot::channel();
+    {
+        let mut map = stream_state
+            .cancel_senders
+            .lock()
+            .map_err(|_| AppError::Custom("Docker log state poisoned".into()))?;
+        map.insert(validated_id.to_string(), cancel_tx);
+    }
+
     use tauri::Emitter;
     use tokio::io::{AsyncBufReadExt, BufReader};
     use tokio::process::Command;
@@ -125,8 +179,14 @@ pub async fn stream_docker_logs(
         .spawn()
         .map_err(AppError::from)?;
 
-    let stdout = child.stdout.take().ok_or_else(|| AppError::Custom("No stdout available from process".to_string()))?;
-    let stderr = child.stderr.take().ok_or_else(|| AppError::Custom("No stderr available from process".to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| AppError::Custom("No stdout available from process".to_string()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| AppError::Custom("No stderr available from process".to_string()))?;
 
     let event_name = format!("docker-log-{}", validated_id);
 
@@ -134,9 +194,21 @@ pub async fn stream_docker_logs(
     let event_clone = event_name.clone();
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            if app_handle_clone.emit(&event_clone, line).is_err() {
-                break;
+        loop {
+            tokio::select! {
+                _ = &mut cancel_rx => {
+                    break;
+                }
+                res = reader.next_line() => {
+                    match res {
+                        Ok(Some(line)) => {
+                            if app_handle_clone.emit(&event_clone, line).is_err() {
+                                break;
+                            }
+                        }
+                        _ => break,
+                    }
+                }
             }
         }
         let _ = child.kill().await;
@@ -150,6 +222,23 @@ pub async fn stream_docker_logs(
     });
 
     Ok("".to_string())
+}
+
+/// Executes the stop_docker_log_stream command to stop streaming logs and kill the child process.
+#[tauri::command]
+pub fn stop_docker_log_stream(
+    container_id: String,
+    stream_state: tauri::State<'_, DockerLogStreamState>,
+) -> AppResult<()> {
+    let validated_id = validate_docker_id(&container_id)?;
+    let mut map = stream_state
+        .cancel_senders
+        .lock()
+        .map_err(|_| AppError::Custom("Docker log state poisoned".into()))?;
+    if let Some(tx) = map.remove(validated_id) {
+        let _ = tx.send(());
+    }
+    Ok(())
 }
 
 pub fn parse_image_lines(stdout: &str) -> Vec<DockerImage> {
@@ -171,9 +260,16 @@ pub fn parse_image_lines(stdout: &str) -> Vec<DockerImage> {
 /// Executes the get_docker_images command.
 #[tauri::command]
 pub fn get_docker_images() -> AppResult<Vec<DockerImage>> {
-    run_cli_parse("docker", &["images", "--format", "{{.ID}}|{{.Repository}}|{{.Tag}}|{{.Size}}"], None, |stdout| {
-        Ok(parse_image_lines(stdout))
-    })
+    run_cli_parse(
+        "docker",
+        &[
+            "images",
+            "--format",
+            "{{.ID}}|{{.Repository}}|{{.Tag}}|{{.Size}}",
+        ],
+        None,
+        |stdout| Ok(parse_image_lines(stdout)),
+    )
 }
 
 /// Executes the docker_pull_image command.
@@ -191,8 +287,14 @@ pub async fn docker_pull_image(image: String, app_handle: tauri::AppHandle) -> A
         .spawn()
         .map_err(AppError::from)?;
 
-    let stdout = child.stdout.take().ok_or_else(|| AppError::Custom("No stdout available from process".to_string()))?;
-    let stderr = child.stderr.take().ok_or_else(|| AppError::Custom("No stderr available from process".to_string()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| AppError::Custom("No stdout available from process".to_string()))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| AppError::Custom("No stderr available from process".to_string()))?;
 
     let event_name = format!("docker-pull-{}", validated_img.replace([':', '/'], "-"));
 
@@ -223,26 +325,43 @@ pub async fn docker_pull_image(image: String, app_handle: tauri::AppHandle) -> A
 pub fn docker_remove_image(image_id: String) -> AppResult<String> {
     let validated_id = validate_docker_id(&image_id)?;
     let res = run_cli("docker", &["rmi", "-f", validated_id], None)?;
-    if res.exit_code == 0 { Ok(res.stdout) } else { Err(AppError::Command(res.stderr)) }
+    if res.exit_code == 0 {
+        Ok(res.stdout)
+    } else {
+        Err(AppError::Command(res.stderr))
+    }
 }
 
 /// Executes the get_container_stats command.
 #[tauri::command]
 pub fn get_container_stats(container_id: String) -> AppResult<ContainerStats> {
     let validated_id = validate_docker_id(&container_id)?;
-    run_cli_parse("docker", &["stats", "--no-stream", "--format", "{{.CPUPerc}}|{{.MemUsage}}|{{.NetIO}}", validated_id], None, |stdout| {
-        let line = stdout.lines().next().unwrap_or("");
-        let parts: Vec<&str> = line.splitn(3, '|').collect();
-        if parts.len() == 3 {
-            Ok(ContainerStats {
-                cpu_perc: parts[0].to_string(),
-                mem_usage: parts[1].to_string(),
-                net_io: parts[2].to_string(),
-            })
-        } else {
-            Err(AppError::Command("Failed to parse stats output".to_string()))
-        }
-    })
+    run_cli_parse(
+        "docker",
+        &[
+            "stats",
+            "--no-stream",
+            "--format",
+            "{{.CPUPerc}}|{{.MemUsage}}|{{.NetIO}}",
+            validated_id,
+        ],
+        None,
+        |stdout| {
+            let line = stdout.lines().next().unwrap_or("");
+            let parts: Vec<&str> = line.splitn(3, '|').collect();
+            if parts.len() == 3 {
+                Ok(ContainerStats {
+                    cpu_perc: parts[0].to_string(),
+                    mem_usage: parts[1].to_string(),
+                    net_io: parts[2].to_string(),
+                })
+            } else {
+                Err(AppError::Command(
+                    "Failed to parse stats output".to_string(),
+                ))
+            }
+        },
+    )
 }
 
 /// Executes the docker_inspect command.

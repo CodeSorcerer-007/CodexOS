@@ -148,21 +148,14 @@ mod tests {
 
     #[test]
     fn test_query_sqlite_syntax_error() {
-        let res = query_sqlite_internal(
-            ":memory:",
-            "INVALID SQL STATEMENT;",
-            None,
-        );
+        let res = query_sqlite_internal(":memory:", "INVALID SQL STATEMENT;", None);
         assert!(res.is_err());
     }
 
     #[test]
     fn test_query_sqlite_non_existent_file() {
-        let res = query_sqlite_internal(
-            "C:\\non_existent_path_12345\\db.sqlite",
-            "SELECT 1;",
-            None,
-        );
+        let res =
+            query_sqlite_internal("C:\\non_existent_path_12345\\db.sqlite", "SELECT 1;", None);
         assert!(res.is_err());
     }
 }

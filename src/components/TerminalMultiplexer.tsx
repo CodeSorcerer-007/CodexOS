@@ -74,19 +74,52 @@ export const TerminalMultiplexer = () => {
 
 export const TerminalPane = ({ id, onClose, showClose, shell, cwd, command = null }: { id: string, onClose: () => void, showClose: boolean, shell: string, cwd: string | null, command?: string | null }) => {
   const { error: toastError } = useToast();
+  const toastErrorRef = useRef(toastError);
+  toastErrorRef.current = toastError;
+  const theme = useStore(s => s.settings.theme);
   const terminalRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
+
+  const getTerminalTheme = (isLight: boolean) => isLight ? {
+    background: '#ffffff',
+    foreground: '#0f172a',
+    cursor: '#0284c7',
+    selectionBackground: '#0284c730',
+    black: '#000000',
+    red: '#dc2626',
+    green: '#16a34a',
+    yellow: '#ca8a04',
+    blue: '#2563eb',
+    magenta: '#9333ea',
+    cyan: '#0891b2',
+    white: '#64748b',
+    brightBlack: '#475569',
+    brightRed: '#ef4444',
+    brightGreen: '#22c55e',
+    brightYellow: '#eab308',
+    brightBlue: '#3b82f6',
+    brightMagenta: '#a855f7',
+    brightCyan: '#06b6d4',
+    brightWhite: '#0f172a',
+  } : {
+    background: '#0a0f18',
+    foreground: '#e2e8f0',
+    cursor: '#06b6d4',
+    selectionBackground: '#06b6d440',
+  };
+
+  useEffect(() => {
+    if (termRef.current) {
+      termRef.current.options.theme = getTerminalTheme(theme === 'light');
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (!terminalRef.current) return;
 
+    const isInitialLight = useStore.getState().settings.theme === 'light';
     const term = new Terminal({
-      theme: {
-        background: '#0a0f18',
-        foreground: '#e2e8f0',
-        cursor: '#06b6d4',
-        selectionBackground: '#06b6d440',
-      },
+      theme: getTerminalTheme(isInitialLight),
       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
       fontSize: 13,
       cursorBlink: true,
@@ -132,7 +165,7 @@ export const TerminalPane = ({ id, onClose, showClose, shell, cwd, command = nul
       // Send input to the specific terminal ID
       term.onData((data: string) => {
         invoke('write_multiplex_pty', { id, data }).catch(e => {
-          toastError('Terminal Error', e instanceof Error ? e.message : String(e));
+          toastErrorRef.current('Terminal Error', e instanceof Error ? e.message : String(e));
         });
       });
 
@@ -141,7 +174,7 @@ export const TerminalPane = ({ id, onClose, showClose, shell, cwd, command = nul
         await invoke('start_multiplex_pty', { id, shell, command, cwd });
         invoke('resize_multiplex_pty', { id, rows: term.rows, cols: term.cols }).catch(() => {});
       } catch (e: unknown) {
-        toastError('Start PTY Failed', String(e));
+        toastErrorRef.current('Start PTY Failed', String(e));
       }
     };
 
@@ -164,11 +197,11 @@ export const TerminalPane = ({ id, onClose, showClose, shell, cwd, command = nul
       if (unlisten) unlisten();
       if (unlistenExit) unlistenExit();
       invoke('kill_multiplex_pty', { id }).catch(e => {
-        toastError('Terminal Error', e instanceof Error ? e.message : String(e));
+        toastErrorRef.current('Terminal Error', e instanceof Error ? e.message : String(e));
       });
       term.dispose();
     };
-  }, [id, shell, cwd, command, toastError]);
+  }, [id, shell, cwd, command]);
 
   return (
     <div className="relative border border-white/10 rounded overflow-hidden bg-black flex flex-col group">

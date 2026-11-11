@@ -212,6 +212,12 @@ pub struct DiagnosisState {
     last_request: Mutex<HashMap<TriggerKind, Instant>>,
 }
 
+impl Default for DiagnosisState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DiagnosisState {
     pub fn new() -> Self {
         let client = Client::builder()
@@ -291,8 +297,11 @@ static RE_JWT: OnceLock<regex::Regex> = OnceLock::new();
 static RE_KEY_VAL: OnceLock<regex::Regex> = OnceLock::new();
 
 pub fn redact_sensitive_data(input: &str) -> String {
-    let re_bearer = RE_BEARER.get_or_init(|| regex::Regex::new(r"(?i)bearer\s+[A-Za-z0-9_\-\.]{10,}").unwrap());
-    let re_jwt = RE_JWT.get_or_init(|| regex::Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}").unwrap());
+    let re_bearer =
+        RE_BEARER.get_or_init(|| regex::Regex::new(r"(?i)bearer\s+[A-Za-z0-9_\-\.]{10,}").unwrap());
+    let re_jwt = RE_JWT.get_or_init(|| {
+        regex::Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}").unwrap()
+    });
     let re_key_val = RE_KEY_VAL.get_or_init(|| regex::Regex::new(r#"(?i)(api[_-]?key|secret|password|passwd|access[_-]?token)\s*[:=]\s*['"]?[A-Za-z0-9_\-\.]{8,}['"]?"#).unwrap());
 
     let mut out = String::with_capacity(input.len());
@@ -307,9 +316,13 @@ pub fn redact_sensitive_data(input: &str) -> String {
             out.push_str("Proxy-Authorization: [REDACTED]\n");
         } else {
             let mut scrubbed = line.to_string();
-            scrubbed = re_bearer.replace_all(&scrubbed, "Bearer [REDACTED_TOKEN]").to_string();
+            scrubbed = re_bearer
+                .replace_all(&scrubbed, "Bearer [REDACTED_TOKEN]")
+                .to_string();
             scrubbed = re_jwt.replace_all(&scrubbed, "[REDACTED_JWT]").to_string();
-            scrubbed = re_key_val.replace_all(&scrubbed, "$1: [REDACTED]").to_string();
+            scrubbed = re_key_val
+                .replace_all(&scrubbed, "$1: [REDACTED]")
+                .to_string();
             out.push_str(&scrubbed);
             out.push('\n');
         }
@@ -385,7 +398,13 @@ async fn gather_context(
                 let mut procs: Vec<(String, u32, u64)> = sys
                     .processes()
                     .iter()
-                    .map(|(pid, proc)| (proc.name().to_string_lossy().to_string(), pid.as_u32(), proc.memory()))
+                    .map(|(pid, proc)| {
+                        (
+                            proc.name().to_string_lossy().to_string(),
+                            pid.as_u32(),
+                            proc.memory(),
+                        )
+                    })
                     .collect();
                 // Sort descending by memory so "top 10" is actually the top 10.
                 procs.sort_by_key(|(_, _, mem)| std::cmp::Reverse(*mem));
@@ -411,12 +430,18 @@ async fn gather_context(
         } => {
             if let Some(req) = proxy::get_request_by_id(app, *request_id) {
                 let body_preview = if req.response_body.len() > 2000 {
-                    format!("{}...(truncated)", truncate_to_char_boundary(&req.response_body, 2000))
+                    format!(
+                        "{}...(truncated)",
+                        truncate_to_char_boundary(&req.response_body, 2000)
+                    )
                 } else {
                     req.response_body.clone()
                 };
                 let req_body_preview = if req.request_body.len() > 1000 {
-                    format!("{}...(truncated)", truncate_to_char_boundary(&req.request_body, 1000))
+                    format!(
+                        "{}...(truncated)",
+                        truncate_to_char_boundary(&req.request_body, 1000)
+                    )
                 } else {
                     req.request_body.clone()
                 };
@@ -553,7 +578,10 @@ async fn call_ollama_diagnosis(client: &Client, context: &str) -> AppResult<Diag
         return Err(format!("Ollama error: {}", err_body).into());
     }
 
-    let parsed: OllamaResponse = res.json().await.map_err(|e| format!("Ollama JSON error: {}", e))?;
+    let parsed: OllamaResponse = res
+        .json()
+        .await
+        .map_err(|e| format!("Ollama JSON error: {}", e))?;
     parse_diagnosis_json(&parsed.response)
 }
 
@@ -573,7 +601,10 @@ pub async fn diagnose_issue(
 
     // Return cached diagnosis if available
     {
-        let mut cache = diagnosis_state.cache.lock().map_err(AppError::from_lock_poison)?;
+        let mut cache = diagnosis_state
+            .cache
+            .lock()
+            .map_err(AppError::from_lock_poison)?;
         if let Some(cached) = cache.get(&key) {
             return Ok(cached);
         }
@@ -582,7 +613,10 @@ pub async fn diagnose_issue(
     // Rate limit: 1 request per 10s per trigger type
     {
         let kind = trigger_kind(&trigger);
-        let mut last = diagnosis_state.last_request.lock().map_err(AppError::from_lock_poison)?;
+        let mut last = diagnosis_state
+            .last_request
+            .lock()
+            .map_err(AppError::from_lock_poison)?;
         if let Some(prev) = last.get(&kind) {
             if prev.elapsed() < Duration::from_secs(RATE_LIMIT_SECS) {
                 return Err(AppError::Custom(format!(
@@ -598,7 +632,9 @@ pub async fn diagnose_issue(
     let context_str = ctx.to_prompt();
 
     if context_str.trim().is_empty() {
-        return Err(AppError::Custom("No diagnostic context available".to_string()));
+        return Err(AppError::Custom(
+            "No diagnostic context available".to_string(),
+        ));
     }
 
     // Use Mistral Cloud AI (with sensitive token redaction) if API key is present; otherwise fall back to local Ollama
@@ -611,7 +647,10 @@ pub async fn diagnose_issue(
 
     // Cache result with LRU deterministic bounded eviction (max 100 entries)
     {
-        let mut cache = diagnosis_state.cache.lock().map_err(AppError::from_lock_poison)?;
+        let mut cache = diagnosis_state
+            .cache
+            .lock()
+            .map_err(AppError::from_lock_poison)?;
         cache.insert(key, diagnosis.clone());
     }
 
@@ -620,7 +659,8 @@ pub async fn diagnose_issue(
 
 #[tauri::command]
 pub fn is_copilot_configured(secrets_state: State<'_, SecretsState>) -> bool {
-    secrets::get_secret_internal(&secrets_state, MISTRAL_API_KEY).is_some() || crate::system_tools::is_ollama_running()
+    secrets::get_secret_internal(&secrets_state, MISTRAL_API_KEY).is_some()
+        || crate::system_tools::is_ollama_running()
 }
 
 // ── Property-Based Tests ─────────────────────────────────────────────────────

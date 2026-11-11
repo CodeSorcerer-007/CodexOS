@@ -4,36 +4,39 @@
   # CodexOS Architecture Guide
 </div>
 
+This document details the architectural blueprints, subsystem boundaries, data durability guarantees, and security threat model of **CodexOS**.
+
 ---
 
 ## 1. System Architecture Overview
 
 ```mermaid
 graph TD
-    subgraph Frontend ["Frontend (React 19 + TypeScript)"]
+    subgraph Frontend ["Frontend (React 19 + TypeScript 6 + Vite)"]
         UI[User Interface / 25+ App Modules]
         ZS[Zustand Multi-Slice Store]
-        IPC_W[Type-Safe IPC Layer (Zod Validation)]
-        LS[(Local Storage Cache)]
+        IPC_W[Type-Safe IPC Layer / Zod Validation]
+        LS[(Local Storage Sync Cache)]
     end
 
     subgraph Backend ["Backend Core (Tauri 2 + Rust)"]
-        CMDS[Command Handlers / IPC Dispatcher]
+        CMDS[Command Dispatcher / 129 Handlers]
         VLT[Argon2id + ChaCha20-Poly1305 Vault]
-        PRX[Network Interceptor / SSRF Firewall]
+        PRX[Network Interceptor & SSRF Firewall]
         PTY[PTY Multiplexer & Terminal Engine]
         FS[Filesystem Sandbox & Watcher]
-        DB[(SQLite Engine: KV & Logs)]
+        DB[(SQLite Engine: KV WAL & Logs)]
         AI[Local Ollama / Mistral Diagnostic Engine]
-        DOCKER[Docker Daemon Engine]
-        GIT[Visual Git Subsystem]
+        DOCKER[Docker Daemon Socket Bridge]
+        GIT[Native Git CLI Wrapper]
+        SSH[Hardened OpenSSH Client]
         WASM[Wasmtime Nano Plugin VM]
     end
 
     UI --> ZS
     ZS <--> LS
     ZS --> IPC_W
-    IPC_W <==>|Tauri IPC Bridge| CMDS
+    IPC_W <==>|Tauri 2 IPC Bridge| CMDS
     CMDS --> VLT
     CMDS --> PRX
     CMDS --> PTY
@@ -42,6 +45,7 @@ graph TD
     CMDS --> AI
     CMDS --> DOCKER
     CMDS --> GIT
+    CMDS --> SSH
     CMDS --> WASM
 ```
 
@@ -57,28 +61,29 @@ graph TD
   - `settingsSlice.ts`: App settings, theme, terminal shell, and copilot config.
   - `uiSlice.ts`: Toast notification system and dialog states.
   - `diagnosisStore.ts`: Real-time AI diagnostic state and root-cause cache.
-- **Data Durability**: Fast in-memory state with synchronous `localStorage` caching and asynchronous SQLite KV persistence via `kvSet`/`kvGet`.
+- **Data Durability**: Dual-write strategy featuring synchronous in-memory state with immediate `localStorage` caching and asynchronous SQLite WAL key-value persistence via `kv_set` / `kv_get`.
 
 ### 2.2 IPC & Data Validation Layer
 - **Type Safety**: Rust structs derive `serde::Serialize` / `serde::Deserialize`.
-- **Runtime Validation**: `src/ipc.ts` parses incoming IPC responses through strict **Zod** schemas (`SysStatsSchema`, `GitStatusSchema`, `DiagnosisSchema`). This protects the frontend from silent contract drift.
+- **Runtime Validation**: `src/ipc.ts` parses incoming IPC responses through strict **Zod** schemas (`SysStatsSchema`, `GitStatusSchema`, `DiagnosisSchema`, `DockerContainerSummarySchema`). This protects the frontend from silent contract drift and invalid payloads. See [ADR 004](./docs/adr/004-ipc-zod-validation.md).
 
 ### 2.3 Backend Subsystems (Rust Engine)
-- **Security & Vault (`secrets.rs`, `vault.rs`, `hmac_vault.rs`)**:
-  - Argon2id key derivation with versioned parameters (memory cost 64MB, time cost 3, parallelism 1, min password 12 chars).
-  - Authenticated symmetric encryption using ChaCha20-Poly1305 and AES-256-GCM fallback.
+- **Security & Cryptography (`secrets.rs`, `vault.rs`, `hmac_vault.rs`)**:
+  - Argon2id key derivation with versioned parameters ($m=64\text{MB}$, $t=3$, $p=1$, minimum 12-character passphrase).
+  - Authenticated symmetric encryption using ChaCha20-Poly1305 with AES-256-GCM fallback.
   - Memory-safe master key management using `zeroize::Zeroizing<Vec<u8>>`.
   - Rate-limited brute-force lockout with SQLite persistence.
+  - HMAC-SHA256 commitment proofs with constant-time verification.
 - **Key-Value Persistence Engine (`kv.rs`)**:
-  - Dedicated, decoupled SQLite persistence subsystem for tab sessions and application settings.
+  - Decoupled SQLite persistence subsystem for tab sessions and application settings.
   - SQLite WAL (Write-Ahead Logging) mode and `synchronous=NORMAL` for maximum concurrent throughput.
 - **Shared Utilities & LRU Cache (`util.rs`)**:
   - Centralized `lock_poison_recover` helper preventing thread poisoning crashes across all Mutex states.
   - Deterministic `BoundedLruCache` powering AI diagnosis cache eviction (max 100 entries).
 - **Network Interception & SSRF Firewall (`proxy.rs`)**:
   - Built-in HTTP/HTTPS intercepting proxy on loopback using Hyper.
-  - Strict SSRF protection blocking private RFC-1918 ranges, loopback, CGNAT, IPv6 ULA/link-local, and cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`).
-  - Panic-free SQLite storage and query engine with bounded log auto-eviction (capped at 500 recent records).
+  - Strict SSRF protection blocking private RFC-1918 ranges, loopback (`127.0.0.0/8`, `::1`), CGNAT (`100.64.0.0/10`), IPv6 ULA/link-local, and cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`).
+  - Panic-free SQLite storage with bounded log auto-eviction (capped at 500 recent records).
 - **AI Diagnostic Engine (`ai.rs`)**:
   - Root-cause diagnostics combining PTY terminal logs, git diffs, process memory spikes, and network errors.
   - Token-budgeted context formatting (`MAX_CONTEXT_CHARS = 16,000`) and rate-limited API calls (1 per 10s).
@@ -89,6 +94,9 @@ graph TD
   - `AllowedPathsState` enforcing path traversal boundaries and explicit workspace allowlists.
   - Poison-resilient file system watching via `notify`.
   - Asynchronous background execution using `tokio::task::spawn_blocking` for high-throughput scans, bloat detection, and metric aggregation.
+- **Git & SSH Subsystems (`git.rs`, `ssh.rs`, `cli_runner.rs`)**:
+  - Subprocess execution wrapper with strict parameter isolation, preventing shell injection vulnerabilities.
+  - Native SSH agent and credential helper support out-of-the-box. See [ADR 005](./docs/adr/005-git-cli-over-libgit2.md).
 - **Plugin Sandbox (`plugin.rs`)**:
   - Isolated WebAssembly execution environment powered by `wasmtime` and WASI capability boundaries.
 
@@ -96,14 +104,15 @@ graph TD
 
 ## 3. Security Architecture & Threat Model
 
-| Threat | Mitigation Mechanism |
-| :--- | :--- |
-| **Arbitrary File Access** | Canonicalized sandbox root enforcement via `AllowedPathsState::is_allowed`. |
-| **SSRF via Network Proxy** | Layered `is_ssrf_blocked` blocking loopback, RFC-1918, CGNAT, link-local, and cloud metadata endpoints. |
-| **Memory Dump of Master Key** | Sensitive keys wrapped in `Zeroizing` buffers, cleared on drop and explicit lock. |
-| **Brute-Force Vault Attack** | Exponential lockout delays enforced and persisted in the encrypted vault metadata. |
-| **Frontend Injection / XSS** | Strict Content Security Policy (CSP) isolating connect targets and disabling inline scripts where possible. |
-| **Backend Thread Panic** | Comprehensive `AppError` type with safe error propagation across all SQLite and Mutex operations. |
+| Threat Category | Potential Attack Vector | CodexOS Mitigation Mechanism |
+| :--- | :--- | :--- |
+| **Arbitrary File Access** | Traversal sequences (`../`), symlink escapes, UNC paths. | Canonicalized sandbox root enforcement via `AllowedPathsState` and `dunce::canonicalize`. |
+| **SSRF via Network Proxy** | Attacker requests internal cloud metadata or loopback services. | Layered `is_ssrf_blocked` blocking loopback, RFC-1918, CGNAT, link-local, and cloud metadata (`169.254.169.254`). |
+| **Memory Extraction of Secrets** | Core dump or RAM inspection extracting API keys or master passwords. | Sensitive keys wrapped in `zeroize::Zeroizing` buffers, cleared on drop and explicit lock. |
+| **Brute-Force Vault Attacks** | Automated dictionary attacks against master passphrase. | Exponential lockout delays enforced and persisted in vault SQLite metadata. |
+| **Frontend Injection / XSS** | Malicious content execution in Webview. | Strict Content Security Policy (CSP) isolating connect targets and disabling unsafe inline scripts. |
+| **Backend Thread Panic** | Unhandled `Result::unwrap()` or poisoned Mutex crashing backend. | Comprehensive `AppError` type with safe error propagation and `lock_poison_recover` guards across all locks. |
+| **Command Injection in Git/SSH** | Malicious filenames or branch names injecting shell meta-characters. | Direct `std::process::Command` argument passing via `cli_runner` without invoking `/bin/sh` or `cmd.exe`. |
 
 ---
 
@@ -117,7 +126,7 @@ npm run dev
 npm run tauri dev
 
 # Run frontend test suite (Fork-isolated Vitest)
-npm run test
+npm test
 
 # Run Rust backend test suite
 cd src-tauri && cargo test
@@ -126,3 +135,14 @@ cd src-tauri && cargo test
 npm run tauri build
 ```
 
+---
+
+## 5. Technical Documentation Links
+
+- [Documentation Portal](./docs/README.md)
+- [IPC API Reference Specification (129 Commands)](./docs/API_REFERENCE.md)
+- [Architectural Decision Records (ADRs)](./docs/adr/README.md)
+- [Enterprise GA Signing Runbook](./docs/ENTERPRISE_GA_SIGNING.md)
+- [CodexOS v1 vs. v2 Comparison Report](./docs/V1_VS_V2_COMPARISON.md)
+- [Contributing Standards](./CONTRIBUTING.md)
+- [Security Policy](./SECURITY.md)

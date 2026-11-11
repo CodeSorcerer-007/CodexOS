@@ -75,6 +75,7 @@ export interface TabsSlice {
   openFiles: string[];
 
   addTab: () => void;
+  openPathInTab: (path: string) => void;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   updateActiveTab: (changes: Partial<AppTab>) => void;
@@ -140,6 +141,58 @@ export const createTabsSlice: StateCreator<DashboardState, [], [], TabsSlice> = 
         historyIndex: state.currentPath ? 0 : -1 
       }];
       const updated = { tabs: newTabs, activeTabId: newId };
+      saveTabs(updated);
+      return updated;
+    }),
+
+    openPathInTab: (path: string) => set((state) => {
+      addAllowedPath(path).catch(() => {});
+
+      // Deduplicate: If an existing tab already has this exact folder open, switch to it
+      const existingTab = state.tabs.find(t => t.currentPath === path);
+      if (existingTab) {
+        const updated = {
+          activeTabId: existingTab.id,
+          currentPath: path,
+          activeApp: 'files' as Tab['activeApp'],
+        };
+        saveTabs({ tabs: state.tabs, activeTabId: existingTab.id });
+        return updated;
+      }
+
+      if (state.tabs.length >= 8) {
+        const updatedTabs = state.tabs.map(t => t.id === state.activeTabId ? {
+          ...t,
+          activeApp: 'files' as Tab['activeApp'],
+          currentPath: path,
+          pathHistory: [...t.pathHistory.slice(0, t.historyIndex + 1), path],
+          historyIndex: t.historyIndex + 1,
+        } : t);
+        const updated = {
+          currentPath: path,
+          activeApp: 'files' as Tab['activeApp'],
+          activeTabId: state.activeTabId,
+          tabs: updatedTabs,
+        };
+        saveTabs(updated);
+        return updated;
+      }
+      const newId = `tab-${crypto.randomUUID()}`;
+      const newTabs = [...state.tabs, {
+        id: newId,
+        activeApp: 'files' as Tab['activeApp'],
+        currentPath: path,
+        selectedFile: null,
+        openFiles: [],
+        pathHistory: [path],
+        historyIndex: 0,
+      }];
+      const updated = {
+        tabs: newTabs,
+        activeTabId: newId,
+        currentPath: path,
+        activeApp: 'files' as Tab['activeApp'],
+      };
       saveTabs(updated);
       return updated;
     }),

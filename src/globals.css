@@ -3,10 +3,18 @@
 
 @theme {
   --color-cyan: rgb(var(--accent-cyan));
-  --color-panel: var(--bg-panel);
-  --color-vault-bg: #06080F;
-  --color-vault-card: #0B0F19;
-  --color-vault-border: rgba(255, 255, 255, 0.08);
+  --color-panel: var(--app-panel);
+  --color-app-bg: var(--app-bg);
+  --color-app-surface: var(--app-surface);
+  --color-app-surface-muted: var(--app-surface-muted);
+  --color-app-panel: var(--app-panel);
+  --color-app-border: var(--app-border);
+  --color-app-text: var(--app-text);
+  --color-app-text-muted: var(--app-text-muted);
+  --color-app-glow: var(--app-glow);
+  --color-vault-bg: var(--app-bg);
+  --color-vault-card: var(--app-surface);
+  --color-vault-border: var(--app-border);
   --color-vault-accent: #00E5FF;
   --color-vault-accent-glow: rgba(0, 229, 255, 0.2);
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -14,8 +22,20 @@
 }
 
 @layer base {
-  :root {
+  :root, html.dark {
     /* Dark theme (default) */
+    --app-bg: #0B0F19;
+    --app-surface: #111827;
+    --app-surface-muted: #1F2937;
+    --app-panel: rgba(21, 24, 28, 0.75);
+    --app-border: rgba(255, 255, 255, 0.08);
+    --app-text: #F9FAFB;
+    --app-text-muted: #9CA3AF;
+    --app-glow: rgba(49, 46, 129, 0.15);
+    --app-card-bg: rgba(0, 0, 0, 0.4);
+    --app-card-border: rgba(255, 255, 255, 0.1);
+    --app-input-bg: rgba(0, 0, 0, 0.4);
+
     --bg-base: 13 15 18;
     --bg-glass: rgba(13, 15, 18, 0.4);
     --bg-panel: rgba(21, 24, 28, 0.6);
@@ -23,11 +43,26 @@
     --text-secondary: 160 170 181;
     --border-subtle: rgba(255, 255, 255, 0.05);
     --accent-cyan: 0 229 255;
+    --color-vault-bg: #06080F;
+    --color-vault-card: #0B0F19;
+    --color-vault-border: rgba(255, 255, 255, 0.08);
     color-scheme: dark;
   }
 
   /* Light theme — full token swap with WCAG AAA compliant secondary text contrast */
-  .light-theme {
+  .light-theme, html.light, :root.light {
+    --app-bg: #F8FAFC;
+    --app-surface: #FFFFFF;
+    --app-surface-muted: #F1F5F9;
+    --app-panel: rgba(255, 255, 255, 0.85);
+    --app-border: rgba(0, 0, 0, 0.08);
+    --app-text: #0F172A;
+    --app-text-muted: #64748B;
+    --app-glow: rgba(99, 102, 241, 0.08);
+    --app-card-bg: rgba(255, 255, 255, 0.85);
+    --app-card-border: rgba(0, 0, 0, 0.08);
+    --app-input-bg: rgba(255, 255, 255, 0.9);
+
     --bg-base: 245 247 250;
     --bg-glass: rgba(255, 255, 255, 0.7);
     --bg-panel: rgba(255, 255, 255, 0.85);
@@ -44,8 +79,8 @@
   body {
     margin: 0;
     font-family: var(--font-sans);
-    background-color: var(--color-vault-bg);
-    color: #E2E8F0;
+    background-color: var(--app-bg);
+    color: var(--app-text);
     overflow: hidden;
   }
 
@@ -164,3 +199,70 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Universal light theme element adaptation across all modules */
+html.light .bg-\[\#0a0f18\],
+.light-theme .bg-\[\#0a0f18\],
+html.light .bg-\[\#050505\],
+.light-theme .bg-\[\#050505\],
+html.light .bg-\[\#06080F\],
+.light-theme .bg-\[\#06080F\],
+html.light .bg-\[\#191919\],
+.light-theme .bg-\[\#191919\] {
+  background-color: var(--app-bg) !important;
+  color: var(--app-text) !important;
+}
+
+html.light .bg-\[\#202020\],
+.light-theme .bg-\[\#202020\],
+html.light .bg-\[\#1e1e1e\],
+.light-theme .bg-\[\#1e1e1e\] {
+  background-color: var(--app-surface) !important;
+  color: var(--app-text) !important;
+}
+
+html.light .bg-black\/60,
+.light-theme .bg-black\/60,
+html.light .bg-black\/50,
+.light-theme .bg-black\/50,
+html.light .bg-black\/40,
+.light-theme .bg-black\/40,
+html.light .bg-black\/30,
+.light-theme .bg-black\/30,
+html.light .bg-black\/20,
+.light-theme .bg-black\/20 {
+  background-color: var(--app-card-bg) !important;
+}
+
+html.light .border-white\/5,
+.light-theme .border-white\/5,
+html.light .border-white\/10,
+.light-theme .border-white\/10,
+html.light .border-white\/15,
+.light-theme .border-white\/15,
+html.light .border-white\/20,
+.light-theme .border-white\/20 {
+  border-color: var(--app-border) !important;
+}
+
+html.light .text-gray-400,
+.light-theme .text-gray-400,
+html.light .text-gray-500,
+.light-theme .text-gray-500 {
+  color: var(--app-text-muted) !important;
+}
+
+html.light .bg-white\/5,
+.light-theme .bg-white\/5,
+html.light .bg-white\/10,
+.light-theme .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .hover\:bg-white\/5:hover,
+.light-theme .hover\:bg-white\/5:hover,
+html.light .hover\:bg-white\/10:hover,
+.light-theme .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+

@@ -15,6 +15,12 @@ pub struct MultiPtyState {
     pub output_buffers: Arc<Mutex<HashMap<String, VecDeque<String>>>>,
 }
 
+impl Default for MultiPtyState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MultiPtyState {
     pub fn new() -> Self {
         Self {
@@ -26,7 +32,11 @@ impl MultiPtyState {
     }
 }
 
-fn append_to_buffer(buffers: &Arc<Mutex<HashMap<String, VecDeque<String>>>>, id: &str, chunk: &str) {
+fn append_to_buffer(
+    buffers: &Arc<Mutex<HashMap<String, VecDeque<String>>>>,
+    id: &str,
+    chunk: &str,
+) {
     let mut map = lock_poison_recover(buffers);
     let buf = map.entry(id.to_string()).or_default();
     for line in chunk.lines() {
@@ -55,7 +65,19 @@ pub fn start_multiplex_pty(
     cwd: Option<String>,
     app_handle: tauri::AppHandle,
     state: tauri::State<'_, MultiPtyState>,
+    paths_state: tauri::State<'_, crate::files::AllowedPathsState>,
 ) -> AppResult<()> {
+    // If a session with this ID already exists, terminate the previous process first
+    {
+        let mut children_guard = lock_poison_recover(&state.children);
+        if let Some(mut old_child) = children_guard.remove(&id) {
+            let _ = old_child.kill();
+        }
+    }
+    lock_poison_recover(&state.writers).remove(&id);
+    lock_poison_recover(&state.masters).remove(&id);
+    lock_poison_recover(&state.output_buffers).remove(&id);
+
     let pty_system = native_pty_system();
     let pair = pty_system
         .openpty(PtySize {
@@ -82,14 +104,14 @@ pub fn start_multiplex_pty(
     let cmd_str = command.unwrap_or(default_shell);
     let mut cmd = CommandBuilder::new(cmd_str);
     if let Some(ref cwd_path) = cwd {
-        let p = std::path::Path::new(cwd_path);
-        if !p.exists() || !p.is_dir() {
+        let p = crate::files::validate_path(cwd_path, &paths_state)?;
+        if !p.is_dir() {
             return Err(crate::error::AppError::Custom(format!(
-                "Working directory does not exist: {}",
+                "Working directory is not a directory: {}",
                 cwd_path
             )));
         }
-        cmd.cwd(cwd_path);
+        cmd.cwd(&p);
     }
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
@@ -179,10 +201,7 @@ pub fn write_multiplex_pty(
 
 /// Executes the kill_multiplex_pty command.
 #[tauri::command]
-pub fn kill_multiplex_pty(
-    id: String,
-    state: tauri::State<'_, MultiPtyState>,
-) -> AppResult<()> {
+pub fn kill_multiplex_pty(id: String, state: tauri::State<'_, MultiPtyState>) -> AppResult<()> {
     let mut guard = lock_poison_recover(&state.children);
     if let Some(mut child) = guard.remove(&id) {
         let _ = child.kill();
@@ -190,6 +209,19 @@ pub fn kill_multiplex_pty(
     lock_poison_recover(&state.writers).remove(&id);
     lock_poison_recover(&state.masters).remove(&id);
     lock_poison_recover(&state.output_buffers).remove(&id);
+    Ok(())
+}
+
+/// Executes the kill_all_ptys command, cleaning up all active child processes.
+#[tauri::command]
+pub fn kill_all_ptys(state: tauri::State<'_, MultiPtyState>) -> AppResult<()> {
+    let mut guard = lock_poison_recover(&state.children);
+    for (_id, mut child) in guard.drain() {
+        let _ = child.kill();
+    }
+    lock_poison_recover(&state.writers).clear();
+    lock_poison_recover(&state.masters).clear();
+    lock_poison_recover(&state.output_buffers).clear();
     Ok(())
 }
 
@@ -225,9 +257,9 @@ mod tests {
     fn test_append_to_buffer() {
         let buffers = Arc::new(Mutex::new(HashMap::new()));
         let id = "test1";
-        
+
         append_to_buffer(&buffers, id, "line1\nline2");
-        
+
         let map = buffers.lock().unwrap();
         let buf = map.get(id).unwrap();
         assert_eq!(buf.len(), 2);
@@ -239,17 +271,17 @@ mod tests {
     fn test_append_to_buffer_max_lines() {
         let buffers = Arc::new(Mutex::new(HashMap::new()));
         let id = "test2";
-        
+
         let mut large_string = String::new();
         for i in 0..250 {
             large_string.push_str(&format!("line{}\n", i));
         }
-        
+
         append_to_buffer(&buffers, id, &large_string);
-        
+
         let map = buffers.lock().unwrap();
         let buf = map.get(id).unwrap();
-        
+
         assert_eq!(buf.len(), MAX_BUFFER_LINES);
         assert_eq!(buf.back().unwrap(), "line249");
         assert_eq!(buf.front().unwrap(), "line50");

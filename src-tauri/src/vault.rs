@@ -1,14 +1,14 @@
 use aes_gcm::{Aes256Gcm, Key as AesKey, Nonce as AesNonce};
+use argon2::Argon2;
 use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     ChaCha20Poly1305, Key, Nonce,
 };
-use zeroize::{Zeroize, Zeroizing};
-use argon2::Argon2;
 use rand::RngCore;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::error::AppResult;
 
@@ -17,10 +17,12 @@ const DEFAULT_M_COST: u32 = 65536;
 const DEFAULT_T_COST: u32 = 3;
 const DEFAULT_P_COST: u32 = 1;
 
-#[tauri::command]
-pub fn encrypt_vault(path: String, password: String, out_path: String) -> AppResult<()> {
+pub fn encrypt_vault_internal(path: &str, password: &str, out_path: &str) -> AppResult<()> {
     if password.len() < crate::util::MIN_PASSWORD_LENGTH {
-        return Err(crate::error::AppError::Vault(format!("Password must be at least {} characters", crate::util::MIN_PASSWORD_LENGTH)));
+        return Err(crate::error::AppError::Vault(format!(
+            "Password must be at least {} characters",
+            crate::util::MIN_PASSWORD_LENGTH
+        )));
     }
     // 1. Zip
     let mut buffer = Vec::new();
@@ -62,11 +64,13 @@ pub fn encrypt_vault(path: String, password: String, out_path: String) -> AppRes
     let mut salt = [0u8; 16];
     rand::thread_rng().fill_bytes(&mut salt);
     let mut key = Zeroizing::new([0u8; 32]);
-    
+
     let params = argon2::Params::new(DEFAULT_M_COST, DEFAULT_T_COST, DEFAULT_P_COST, Some(32))
         .map_err(|e| format!("Argon2 params error: {}", e))?;
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
-    argon2.hash_password_into(password.as_bytes(), &salt, &mut *key).map_err(|e| e.to_string())?;
+    argon2
+        .hash_password_into(password.as_bytes(), &salt, &mut *key)
+        .map_err(|e| e.to_string())?;
 
     let cipher = ChaCha20Poly1305::new(&Key::from(*key));
     let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96-bits
@@ -79,11 +83,17 @@ pub fn encrypt_vault(path: String, password: String, out_path: String) -> AppRes
     buffer.zeroize();
 
     // 3. Save: magic(4) + m_cost(4) + t_cost(4) + p_cost(4) + salt(16) + nonce(12) + ciphertext
-    let mut out_file = fs::File::create(&out_path).map_err(|e| e.to_string())?;
+    let mut out_file = fs::File::create(out_path).map_err(|e| e.to_string())?;
     out_file.write_all(VAULT_MAGIC).map_err(|e| e.to_string())?;
-    out_file.write_all(&DEFAULT_M_COST.to_le_bytes()).map_err(|e| e.to_string())?;
-    out_file.write_all(&DEFAULT_T_COST.to_le_bytes()).map_err(|e| e.to_string())?;
-    out_file.write_all(&DEFAULT_P_COST.to_le_bytes()).map_err(|e| e.to_string())?;
+    out_file
+        .write_all(&DEFAULT_M_COST.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    out_file
+        .write_all(&DEFAULT_T_COST.to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    out_file
+        .write_all(&DEFAULT_P_COST.to_le_bytes())
+        .map_err(|e| e.to_string())?;
     out_file.write_all(&salt).map_err(|e| e.to_string())?;
     out_file.write_all(&nonce).map_err(|e| e.to_string())?;
     out_file.write_all(&ciphertext).map_err(|e| e.to_string())?;
@@ -91,21 +101,49 @@ pub fn encrypt_vault(path: String, password: String, out_path: String) -> AppRes
     Ok(())
 }
 
+/// Executes the encrypt_vault command with workspace sandbox verification.
 #[tauri::command]
-pub fn decrypt_vault(path: String, password: String, out_path: String) -> AppResult<()> {
+pub fn encrypt_vault(
+    path: String,
+    password: String,
+    out_path: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<()> {
+    crate::files::validate_path(&path, &allowed_paths)?;
+    crate::files::validate_path(&out_path, &allowed_paths)?;
+    encrypt_vault_internal(&path, &password, &out_path)
+}
+
+pub fn decrypt_vault_internal(path: &str, password: &str, out_path: &str) -> AppResult<()> {
     if password.is_empty() {
-        return Err(crate::error::AppError::Vault("Password cannot be empty".to_string()));
+        return Err(crate::error::AppError::Vault(
+            "Password cannot be empty".to_string(),
+        ));
     }
-    let data = fs::read(&path).map_err(|e| e.to_string())?;
+    let data = fs::read(path).map_err(|e| e.to_string())?;
     if data.len() < 28 {
-        return Err(crate::error::AppError::Vault("Vault file is too small or corrupt".to_string()));
+        return Err(crate::error::AppError::Vault(
+            "Vault file is too small or corrupt".to_string(),
+        ));
     }
 
     let is_v1 = data.starts_with(VAULT_MAGIC);
     let (m_cost, t_cost, p_cost, salt, nonce_bytes, ciphertext) = if is_v1 && data.len() >= 44 {
-        let m = data.get(4..8).and_then(|s| s.try_into().ok()).map(u32::from_le_bytes).unwrap_or(0);
-        let t = data.get(8..12).and_then(|s| s.try_into().ok()).map(u32::from_le_bytes).unwrap_or(0);
-        let p = data.get(12..16).and_then(|s| s.try_into().ok()).map(u32::from_le_bytes).unwrap_or(0);
+        let m = data
+            .get(4..8)
+            .and_then(|s| s.try_into().ok())
+            .map(u32::from_le_bytes)
+            .unwrap_or(0);
+        let t = data
+            .get(8..12)
+            .and_then(|s| s.try_into().ok())
+            .map(u32::from_le_bytes)
+            .unwrap_or(0);
+        let p = data
+            .get(12..16)
+            .and_then(|s| s.try_into().ok())
+            .map(u32::from_le_bytes)
+            .unwrap_or(0);
         let salt = &data[16..32];
         let nonce = &data[32..44];
         let ct = &data[44..];
@@ -124,7 +162,10 @@ pub fn decrypt_vault(path: String, password: String, out_path: String) -> AppRes
     if m_cost > 0 {
         if let Ok(params) = argon2::Params::new(m_cost, t_cost, p_cost, Some(32)) {
             let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
-            if argon2.hash_password_into(password.as_bytes(), salt, &mut *key).is_ok() {
+            if argon2
+                .hash_password_into(password.as_bytes(), salt, &mut *key)
+                .is_ok()
+            {
                 let chacha_cipher = ChaCha20Poly1305::new(&Key::from(*key));
                 let chacha_nonce = Nonce::from_slice(nonce_bytes);
                 if let Ok(pt) = chacha_cipher.decrypt(chacha_nonce, ciphertext) {
@@ -137,7 +178,10 @@ pub fn decrypt_vault(path: String, password: String, out_path: String) -> AppRes
     if decrypted.is_none() {
         // Fallback with Argon2::default() for legacy vaults
         let argon2 = Argon2::default();
-        if argon2.hash_password_into(password.as_bytes(), salt, &mut *key).is_ok() {
+        if argon2
+            .hash_password_into(password.as_bytes(), salt, &mut *key)
+            .is_ok()
+        {
             let chacha_cipher = ChaCha20Poly1305::new(&Key::from(*key));
             let chacha_nonce = Nonce::from_slice(nonce_bytes);
             if let Ok(pt) = chacha_cipher.decrypt(chacha_nonce, ciphertext) {
@@ -154,11 +198,13 @@ pub fn decrypt_vault(path: String, password: String, out_path: String) -> AppRes
     }
 
     let plaintext = decrypted.ok_or_else(|| {
-        crate::error::AppError::Vault("Decryption failed! Incorrect password or corrupted vault.".to_string())
+        crate::error::AppError::Vault(
+            "Decryption failed! Incorrect password or corrupted vault.".to_string(),
+        )
     })?;
 
-const MAX_EXTRACT_FILE_BYTES: u64 = 100 * 1024 * 1024; // 100 MB per file
-const MAX_EXTRACT_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB total
+    const MAX_EXTRACT_FILE_BYTES: u64 = 100 * 1024 * 1024; // 100 MB per file
+    const MAX_EXTRACT_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB total
 
     let mut archive =
         zip::ZipArchive::new(std::io::Cursor::new(plaintext)).map_err(|e| e.to_string())?;
@@ -180,18 +226,33 @@ const MAX_EXTRACT_TOTAL_BYTES: u64 = 500 * 1024 * 1024; // 500 MB total
             }
             let mut outfile = fs::File::create(&outpath).map_err(|e| e.to_string())?;
             let mut limited_reader = (&mut file).take(MAX_EXTRACT_FILE_BYTES);
-            let bytes_written = std::io::copy(&mut limited_reader, &mut outfile).map_err(|e| e.to_string())?;
+            let bytes_written =
+                std::io::copy(&mut limited_reader, &mut outfile).map_err(|e| e.to_string())?;
 
             total_extracted_bytes = total_extracted_bytes.saturating_add(bytes_written);
             if total_extracted_bytes > MAX_EXTRACT_TOTAL_BYTES {
                 return Err(crate::error::AppError::Vault(
-                    "Vault extraction exceeded maximum allowed total size (500 MB safety limit).".to_string(),
+                    "Vault extraction exceeded maximum allowed total size (500 MB safety limit)."
+                        .to_string(),
                 ));
             }
         }
     }
 
     Ok(())
+}
+
+/// Executes the decrypt_vault command with workspace sandbox verification.
+#[tauri::command]
+pub fn decrypt_vault(
+    path: String,
+    password: String,
+    out_path: String,
+    allowed_paths: tauri::State<'_, crate::files::AllowedPathsState>,
+) -> AppResult<()> {
+    crate::files::validate_path(&path, &allowed_paths)?;
+    crate::files::validate_path(&out_path, &allowed_paths)?;
+    decrypt_vault_internal(&path, &password, &out_path)
 }
 
 #[cfg(test)]
@@ -212,21 +273,23 @@ mod tests {
 
         let pass = "password12345".to_string();
 
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            pass.clone(),
-            vault_file.to_string_lossy().to_string(),
-        ).unwrap();
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            &pass,
+            &vault_file.to_string_lossy(),
+        )
+        .unwrap();
 
         assert!(vault_file.exists());
 
         fs::create_dir(&out_dir).unwrap();
 
-        decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            pass,
-            out_dir.to_string_lossy().to_string(),
-        ).unwrap();
+        decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            &pass,
+            &out_dir.to_string_lossy(),
+        )
+        .unwrap();
 
         let extracted = fs::read_to_string(out_dir.join("test.txt")).unwrap();
         assert_eq!(extracted, "hello world");
@@ -242,18 +305,19 @@ mod tests {
         fs::create_dir(&in_dir).unwrap();
         fs::write(in_dir.join("test.txt"), "hello world").unwrap();
 
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            "password12345".to_string(),
-            vault_file.to_string_lossy().to_string(),
-        ).unwrap();
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            "password12345",
+            &vault_file.to_string_lossy(),
+        )
+        .unwrap();
 
         fs::create_dir(&out_dir).unwrap();
 
-        let res = decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            "wrongpass123".to_string(),
-            out_dir.to_string_lossy().to_string(),
+        let res = decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            "wrongpass123",
+            &out_dir.to_string_lossy(),
         );
 
         assert!(res.is_err());
@@ -269,19 +333,21 @@ mod tests {
         fs::create_dir(&in_dir).unwrap();
 
         let pass = "password12345".to_string();
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            pass.clone(),
-            vault_file.to_string_lossy().to_string(),
-        ).unwrap();
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            &pass,
+            &vault_file.to_string_lossy(),
+        )
+        .unwrap();
 
         fs::create_dir(&out_dir).unwrap();
 
-        decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            pass,
-            out_dir.to_string_lossy().to_string(),
-        ).unwrap();
+        decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            &pass,
+            &out_dir.to_string_lossy(),
+        )
+        .unwrap();
 
         let count = fs::read_dir(&out_dir).unwrap().count();
         assert_eq!(count, 0);
@@ -300,19 +366,21 @@ mod tests {
 
         let pass = "password12345".to_string();
 
-        encrypt_vault(
-            in_dir.to_string_lossy().to_string(),
-            pass.clone(),
-            vault_file.to_string_lossy().to_string(),
-        ).unwrap();
+        encrypt_vault_internal(
+            &in_dir.to_string_lossy(),
+            &pass,
+            &vault_file.to_string_lossy(),
+        )
+        .unwrap();
 
         fs::create_dir(&out_dir).unwrap();
 
-        decrypt_vault(
-            vault_file.to_string_lossy().to_string(),
-            pass,
-            out_dir.to_string_lossy().to_string(),
-        ).unwrap();
+        decrypt_vault_internal(
+            &vault_file.to_string_lossy(),
+            &pass,
+            &out_dir.to_string_lossy(),
+        )
+        .unwrap();
 
         let extracted = fs::read_to_string(out_dir.join("nested").join("test.txt")).unwrap();
         assert_eq!(extracted, "nested hello");

@@ -1,21 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Database, Activity, HardDrive, Cpu, GitBranch, Key, Network, ShieldAlert, Box } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { useStore } from '../store/store';
+import { useMetricsStore } from '../store/metricsStore';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
 import type { AppId } from '../types/apps';
 import { SIDEBAR_ITEMS } from './layout/Sidebar';
 
 interface DashboardProps {
-  onOpenApp: (app: AppId) => void;
-}
-
-interface SysStats {
-  cpu_usage: number;
-  mem_total: number;
-  mem_used: number;
-  drives: Array<{ name: string; mount_point: string; total_space: number; available_space: number }>;
+  onOpenApp?: (app: AppId) => void;
 }
 
 interface GitStatus {
@@ -34,48 +28,84 @@ interface DockerContainerSummary {
 }
 
 export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
-  const [sysStats, setSysStats] = useState<SysStats | null>(null);
   const secretsCount = useStore(s => s.secretsCount);
   const activeTunnelCount = useStore(s => s.activeTunnelCount);
   const currentPath = useStore(s => s.currentPath);
   const peerCount = useStore(s => s.peerCount);
   const recentWorkspaces = useStore(s => s.settings.recentWorkspaces || []);
   const openWorkspace = useStore(s => s.openWorkspace);
-  
-  const [gitModified, setGitModified] = useState(0);
-  const [dockerCount, setDockerCount] = useState(0);
 
+  // Centralized system telemetry store
+  const cpuUsage = useMetricsStore(s => s.cpuUsage);
+  const memTotal = useMetricsStore(s => s.memTotal);
+  const memUsed = useMetricsStore(s => s.memUsed);
+  const drives = useMetricsStore(s => s.drives);
+
+  const sysStats = useMemo(() => ({
+    cpu_usage: cpuUsage ?? 0,
+    mem_total: memTotal,
+    mem_used: memUsed,
+    drives,
+  }), [cpuUsage, memTotal, memUsed, drives]);
+  
+  const [gitModified, setGitModified] = useState<number | null>(null);
+  const [dockerCount, setDockerCount] = useState<number | null>(null);
+
+  // Ensure telemetry is populated when mounting Dashboard
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const stats = await invoke<SysStats>('get_sys_stats');
-        setSysStats(stats);
-      } catch (e: unknown) {
-        console.warn("Failed to fetch sys stats:", e);
-      }
-    };
-    fetchStats();
-    const interval = setInterval(fetchStats, 2000);
-    return () => clearInterval(interval);
+    useMetricsStore.getState().fetchMetrics();
   }, []);
 
+  // Git status: queried only on workspace path change or on window focus
   useEffect(() => {
-    if (currentPath) {
-      invoke<GitStatus>('get_git_status', { path: currentPath })
-        .then(status => setGitModified(status.staged.length + status.unstaged.length + status.untracked.length))
-        .catch(() => setGitModified(0));
-    } else {
-      setGitModified(0);
-    }
+    let isMounted = true;
+    const fetchGit = async () => {
+      if (!currentPath) {
+        if (isMounted) setGitModified(null);
+        return;
+      }
+      try {
+        const status = await invoke<GitStatus>('get_git_status', { path: currentPath });
+        if (isMounted) {
+          setGitModified(status.staged.length + status.unstaged.length + status.untracked.length);
+        }
+      } catch {
+        if (isMounted) setGitModified(null);
+      }
+    };
+
+    fetchGit();
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchGit();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [currentPath]);
 
+  // Docker status: queried once on mount; does not spin background intervals
   useEffect(() => {
-    invoke<DockerContainerSummary[]>('get_docker_containers')
-      .then(containers => setDockerCount(containers.length))
-      .catch(() => setDockerCount(0));
+    let isMounted = true;
+    const fetchDocker = async () => {
+      try {
+        const containers = await invoke<DockerContainerSummary[]>('get_docker_containers');
+        if (isMounted) setDockerCount(containers.length);
+      } catch {
+        if (isMounted) setDockerCount(null);
+      }
+    };
+    fetchDocker();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const formatBytes = (bytes: number) => {
+    if (bytes == null || isNaN(bytes)) return '—';
     if (bytes === 0) return '0 B';
     const k = 1024 ** 3; // GB
     return `${(bytes / k).toFixed(1)} GB`;
@@ -83,10 +113,10 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
 
   const [cpuHistory, setCpuHistory] = useState<{ value: number }[]>([]);
   useEffect(() => {
-    if (sysStats) {
-      setCpuHistory(prev => [...prev.slice(-19), { value: sysStats.cpu_usage }]);
+    if (cpuUsage !== null) {
+      setCpuHistory(prev => [...prev.slice(-19), { value: cpuUsage }]);
     }
-  }, [sysStats]);
+  }, [cpuUsage]);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -121,7 +151,7 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
     let badge: string | number | null = null;
     if (item.id === 'secrets' && secretsCount > 0) badge = secretsCount;
     if (item.id === 'tunnel' && activeTunnelCount > 0) badge = activeTunnelCount;
-    if (item.id === 'git' && gitModified > 0) badge = gitModified;
+    if (item.id === 'git' && gitModified !== null && gitModified > 0) badge = gitModified;
     
     return {
       id: item.id as AppId,
@@ -133,8 +163,8 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
     };
   });
 
-  const totalSpace = sysStats?.drives.reduce((acc, d) => acc + d.total_space, 0) || 0;
-  const availableSpace = sysStats?.drives.reduce((acc, d) => acc + d.available_space, 0) || 0;
+  const totalSpace = drives.reduce((acc, d) => acc + (d.total_space || 0), 0);
+  const availableSpace = drives.reduce((acc, d) => acc + (d.available_space || 0), 0);
 
   return (
     <div className="flex flex-col h-full w-full p-8 overflow-y-auto">
@@ -143,22 +173,22 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
         animate={{ opacity: 1, y: 0 }}
         className="mb-10 flex items-center gap-5"
       >
-        <img src="/logo.png" alt="CodexOS Logo" className="w-16 h-16 object-contain rounded-2xl shadow-xl shadow-indigo-500/20 border border-white/10 shrink-0" />
+        <img src="/logo.png" alt="CodexOS Logo" className="w-16 h-16 object-contain rounded-2xl shadow-xl shadow-indigo-500/20 border border-app-border shrink-0" />
         <div>
           <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 mb-1 tracking-tight">
             Welcome to CodexOS v2
           </h1>
-          <p className="text-gray-400 font-medium">The Ultimate Offline Developer OS.</p>
+          <p className="text-app-text-muted font-medium">The Ultimate Offline Developer OS.</p>
         </div>
       </motion.div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-6">
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden shadow-sm">
           <div className="flex items-center gap-4 z-10">
             <div className="p-4 bg-blue-500/10 rounded-xl"><Cpu className="w-8 h-8 text-blue-400" /></div>
             <div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">CPU</div>
-              <div className="text-xl font-black text-white">{sysStats ? sysStats.cpu_usage.toFixed(1) + '%' : '—'}</div>
+              <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">CPU</div>
+              <div className="text-xl font-black text-app-text">{sysStats && !isNaN(sysStats.cpu_usage) ? sysStats.cpu_usage.toFixed(1) + '%' : '—'}</div>
             </div>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-16 opacity-30 pointer-events-none">
@@ -170,77 +200,77 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden shadow-sm">
           <div className="flex items-center gap-4 z-10">
             <div className="p-4 bg-fuchsia-500/10 rounded-xl"><Activity className="w-8 h-8 text-fuchsia-400" /></div>
             <div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">Memory</div>
-              <div className="text-xl font-black text-white">{sysStats ? `${formatBytes(sysStats.mem_used)} / ${formatBytes(sysStats.mem_total)}` : '—'}</div>
+              <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">Memory</div>
+              <div className="text-xl font-black text-app-text">{sysStats && !isNaN(sysStats.mem_used) && !isNaN(sysStats.mem_total) ? `${formatBytes(sysStats.mem_used)} / ${formatBytes(sysStats.mem_total)}` : '—'}</div>
             </div>
           </div>
         </motion.div>
         
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden shadow-sm">
           <div className="flex items-center gap-4 z-10">
             <div className="p-4 bg-yellow-500/10 rounded-xl"><Key className="w-8 h-8 text-yellow-400" /></div>
             <div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">Secrets</div>
-              <div className="text-xl font-black text-white">{secretsCount} Active</div>
+              <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">Secrets</div>
+              <div className="text-xl font-black text-app-text">{secretsCount} Active</div>
             </div>
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden shadow-sm">
           <div className="flex items-center gap-4 z-10">
             <div className="p-4 bg-pink-500/10 rounded-xl"><ShieldAlert className="w-8 h-8 text-pink-400" /></div>
             <div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">HMAC Proof</div>
-              <div className="text-xl font-black text-white">Initialized</div>
+              <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">HMAC Proof</div>
+              <div className="text-xl font-black text-app-text">Initialized</div>
             </div>
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-6 flex flex-col justify-center gap-4 relative overflow-hidden shadow-sm">
           <div className="flex items-center gap-4 z-10">
             <div className="p-4 bg-emerald-500/10 rounded-xl"><Network className="w-8 h-8 text-emerald-400" /></div>
             <div>
-              <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">P2P Mesh</div>
-              <div className="text-xl font-black text-white">{peerCount} Peers</div>
+              <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">P2P Mesh</div>
+              <div className="text-xl font-black text-app-text">{peerCount} Peers</div>
             </div>
           </div>
         </motion.div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-4 flex items-center gap-4 shadow-sm">
           <div className="p-2 bg-indigo-500/10 rounded-lg"><HardDrive className="w-5 h-5 text-indigo-400" /></div>
           <div>
-            <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">Total Storage</div>
-            <div className="text-sm font-bold text-white">{sysStats ? formatBytes(totalSpace) : '—'}</div>
+            <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">Total Storage</div>
+            <div className="text-sm font-bold text-app-text">{sysStats && drives.length > 0 ? formatBytes(totalSpace) : '—'}</div>
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.45 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.45 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-4 flex items-center gap-4 shadow-sm">
           <div className="p-2 bg-teal-500/10 rounded-lg"><Database className="w-5 h-5 text-teal-400" /></div>
           <div>
-            <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">Available Storage</div>
-            <div className="text-sm font-bold text-white">{sysStats ? formatBytes(availableSpace) : '—'}</div>
+            <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">Available Storage</div>
+            <div className="text-sm font-bold text-app-text">{sysStats && drives.length > 0 ? formatBytes(availableSpace) : '—'}</div>
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-4 flex items-center gap-4 shadow-sm">
           <div className="p-2 bg-rose-500/10 rounded-lg"><GitBranch className="w-5 h-5 text-rose-400" /></div>
           <div>
-            <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">Git Modified</div>
-            <div className="text-sm font-bold text-white">{currentPath ? gitModified : '—'}</div>
+            <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">Git Modified</div>
+            <div className="text-sm font-bold text-app-text">{currentPath && gitModified !== null ? gitModified : '—'}</div>
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55 }} className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-4 flex items-center gap-4">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.55 }} className="bg-app-surface/60 backdrop-blur-md border border-app-border rounded-2xl p-4 flex items-center gap-4 shadow-sm">
           <div className="p-2 bg-sky-500/10 rounded-lg"><Box className="w-5 h-5 text-sky-400" /></div>
           <div>
-            <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">Containers</div>
-            <div className="text-sm font-bold text-white">{dockerCount} Active</div>
+            <div className="text-xs text-app-text-muted font-bold uppercase tracking-wider">Containers</div>
+            <div className="text-sm font-bold text-app-text">{dockerCount !== null ? `${dockerCount} Active` : '—'}</div>
           </div>
         </motion.div>
       </div>
@@ -253,7 +283,7 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
           className="mb-10"
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest">Recent Workspaces</h2>
+            <h2 className="text-sm font-bold text-app-text-muted uppercase tracking-widest">Recent Workspaces</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {recentWorkspaces.slice(0, 3).map((w, i) => (
@@ -264,17 +294,17 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   openWorkspace(w.path, w.name);
-                  onOpenApp('files');
+                  onOpenApp?.('files');
                 }}
-                className="bg-black/40 backdrop-blur-md border border-white/10 hover:border-indigo-500/50 rounded-xl p-4 flex flex-col items-start gap-2 transition-all duration-300 text-left group"
+                className="bg-app-surface/60 backdrop-blur-md border border-app-border hover:border-indigo-500/50 rounded-xl p-4 flex flex-col items-start gap-2 transition-all duration-300 text-left group shadow-sm"
               >
                 <div className="flex items-center gap-2">
                   <div className="p-2 bg-indigo-500/10 rounded-lg group-hover:bg-indigo-500/20 transition-colors">
                     <HardDrive className="w-4 h-4 text-indigo-400" />
                   </div>
-                  <span className="font-bold text-white group-hover:text-indigo-300 transition-colors">{w.name}</span>
+                  <span className="font-bold text-app-text group-hover:text-indigo-400 transition-colors">{w.name}</span>
                 </div>
-                <span className="text-xs text-gray-500 font-mono truncate w-full">{w.path}</span>
+                <span className="text-xs text-app-text-muted font-mono truncate w-full">{w.path}</span>
               </motion.button>
             ))}
           </div>
@@ -286,7 +316,7 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
         initial="hidden"
         animate="show"
       >
-        <h2 className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Pinned Utilities</h2>
+        <h2 className="text-sm font-bold text-app-text-muted uppercase tracking-widest mb-4">Pinned Utilities</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {widgets.map((w) => (
             <motion.button
@@ -294,17 +324,17 @@ export const CodexOSDashboard = ({ onOpenApp }: DashboardProps) => {
               variants={itemVariants}
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => onOpenApp(w.id)}
-              className={`bg-black/40 backdrop-blur-sm border ${w.color} rounded-2xl p-6 flex flex-col items-start gap-4 transition-all duration-300 group text-left relative overflow-hidden`}
+              onClick={() => onOpenApp?.(w.id)}
+              className={`bg-app-surface/60 backdrop-blur-sm border ${w.color} rounded-2xl p-6 flex flex-col items-start gap-4 transition-all duration-300 group text-left relative overflow-hidden shadow-sm`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               {w.icon}
               <div className="flex-1">
-                <h3 className="font-bold text-lg text-white group-hover:text-white transition-colors">{w.name}</h3>
-                <p className="text-sm text-gray-400">{w.desc}</p>
+                <h3 className="font-bold text-lg text-app-text group-hover:text-indigo-400 transition-colors">{w.name}</h3>
+                <p className="text-sm text-app-text-muted">{w.desc}</p>
               </div>
               {w.badge !== null && (
-                <div className="absolute top-4 right-4 bg-white/10 border border-white/20 text-white text-xs font-bold px-2 py-1 rounded-full cx-badge-pulse">
+                <div className="absolute top-4 right-4 bg-white/10 dark:bg-white/10 border border-white/20 text-app-text text-xs font-bold px-2 py-1 rounded-full cx-badge-pulse">
                   {w.badge}
                 </div>
               )}

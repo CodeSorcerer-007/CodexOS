@@ -1,97 +1,110 @@
 # Contributing to CodexOS
 
-Thanks for your interest in contributing. Below is everything you need to get started.
+Thank you for your interest in contributing to **CodexOS**! This guide outlines our development workflow, coding standards, testing requirements, and pull request guidelines.
 
 ---
 
 ## Prerequisites
 
-| Tool | Version |
-|---|---|
-| Node.js | ≥ 20 (see `.nvmrc`) |
-| Rust | latest stable (`rustup update`) |
-| Windows MSVC build tools | Visual Studio Build Tools 2022 |
+Ensure you have the following toolchains installed:
+
+| Tool | Required Version | Verification Command |
+| :--- | :--- | :--- |
+| **Node.js** | $\ge 20$ (see `.nvmrc`) | `node --version` |
+| **Rust** | Latest stable ($\ge 1.77$) | `rustc --version` |
+| **C++ Build Tools** | Visual Studio Build Tools 2022 (Windows) or `build-essential` (Linux) | System check |
+| **Git** | $\ge 2.30$ | `git --version` |
 
 ---
 
-## Local Development
+## Local Development Setup
 
 ```bash
-# Clone
+# 1. Fork and clone the repository
 git clone https://github.com/CodeSorcerer-007/CodexOS.git
 cd CodexOS
 
-# Install frontend deps
+# 2. Install frontend dependencies
 npm install
 
-# Start dev server (Tauri + Vite with hot-reload)
+# 3. Launch Tauri development desktop app (Vite HMR + Rust Backend)
 npm run tauri dev
 ```
 
 ---
 
-## Running Tests
+## Quality & Testing Gates
+
+All pull requests must pass the automated test and linting gates before they can be merged. Run these locally prior to opening a PR:
 
 ```bash
-# Frontend component tests (Vitest)
+# 1. Run ultra-fast linter (oxlint)
+npm run lint
+
+# 2. Run TypeScript typecheck
+npx tsc -b
+
+# 3. Run frontend component & unit tests (Vitest)
 npm test
 
-# Rust unit + property-based tests
+# 4. Run Rust unit and integration tests
 cd src-tauri && cargo test
 
-# Rust static analysis
+# 5. Run Rust linter (Clippy)
 cd src-tauri && cargo clippy -- -D warnings
 
-# Frontend lint
-npm run lint
-```
-
-All of the above must pass before submitting a PR. The CI pipeline enforces this automatically.
-
----
-
-## Testing Requirements
-
-- **Frontend**: All new UI components must include a co-located or `__tests__` Vitest test file covering initial render, user interaction, error boundary handling, and ARIA accessibility roles.
-- **Rust Backend**: Every `#[tauri::command]` and core subsystem function must include unit tests in a `#[cfg(test)] mod tests` block.
-- **Security Invariants**: Any change affecting cryptographic keys, path sandboxing, or proxy filtering must include a regression test in `src-tauri/tests/integration_test.rs`.
-- **Coverage**: Total line and branch coverage must not decrease on any PR.
-
----
-
-## Project Structure & Architecture
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for a comprehensive breakdown of the system layers, IPC contract, security threat model, and SQLite data durability design.
-
-```
-src/                   React frontend (components, stores, hooks, IPC)
-src-tauri/src/         Rust backend (Tauri 2 commands, vault, proxy, PTY)
-src-tauri/capabilities/ Tauri 2.0 IPC capability grants
-.github/workflows/     CI & Release automation pipelines
+# 6. Check Rust code formatting
+cd src-tauri && cargo fmt --check
 ```
 
 ---
 
-## Pull Request Guidelines
+## Git Workflow & Commit Standards
 
-1. **Branch off `main`** — name your branch `feat/<topic>` or `fix/<topic>`.
-2. **One concern per PR** — keep changes focused and reviewable.
-3. **Write tests** for new Rust commands and non-trivial React components.
-4. **Keep commits atomic** — each commit should build and pass tests on its own.
-5. **Log Your Commits** — Add your commit entry to [COMMIT_LOG.md](./COMMIT_LOG.md) to record your contribution and credit.
-6. **Update Documentation** if you add a new module, alter UI behaviors, or change the architecture.
-7. **No secrets in commits** — use the Secrets Vault for any API keys.
+We enforce [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for clear, automated release changelogs.
+
+### Branch Naming
+- Features: `feat/<short-description>` (e.g., `feat/terminal-color-picker`)
+- Bug Fixes: `fix/<short-description>` (e.g., `fix/proxy-ssrf-ipv6`)
+- Documentation: `docs/<short-description>` (e.g., `docs/add-api-endpoints`)
+- Refactoring: `refactor/<short-description>` (e.g., `refactor/zustand-tabs-slice`)
+
+### Commit Types
+| Type | Purpose | Example |
+| :--- | :--- | :--- |
+| `feat` | Introduces a new feature | `feat(vault): add auto-lock timer option` |
+| `fix` | Fixes a bug | `fix(terminal): prevent cursor clipping on resize` |
+| `docs` | Documentation changes only | `docs(api): update proxy replay arguments` |
+| `refactor` | Code restructuring with no behavior change | `refactor(proxy): streamline stream buffering` |
+| `perf` | A code change that improves performance | `perf(files): batch stat lookups for directory treemap` |
+| `test` | Adding or updating tests | `test(vault): add fast-check unlock property tests` |
+| `chore` | Dependency bumps or build tool updates | `chore(deps): update tauri to 2.11.3` |
+| `ci` | Changes to CI workflows or scripts | `ci(github): cache cargo registry across runners` |
 
 ---
 
-## Security Issues
+## Testing Standards
 
-Please do **not** file public issues for security vulnerabilities. Email the maintainers directly or open a private security advisory on GitHub.
+- **Frontend Components**: All non-trivial UI modules must include tests (`.test.tsx`) asserting render states, user interaction events, keyboard navigation, and error boundary isolation.
+- **Rust Backend**:
+  - Every `#[tauri::command]` handler must include unit tests within a `#[cfg(test)] mod tests` block.
+  - Changes touching security boundaries (`AllowedPathsState`, `secrets.rs`, `proxy.rs`) must include regression tests in `src-tauri/tests/integration_test.rs`.
+- **Zero Coverage Regression**: PRs should maintain or increase existing test coverage.
 
 ---
 
-## Code Style
+## Pull Request Submission Checklist
 
-- **Rust**: `cargo fmt` + `cargo clippy` must produce zero warnings.
-- **TypeScript/React**: `npm run lint` (oxlint) must produce zero errors. Use named exports. Avoid `any`.
-- **CSS**: Tailwind utility classes only — no raw CSS unless adding a design-token to the existing CSS custom property sheet.
+When opening a Pull Request:
+1. **Branch off `main`** and keep commits atomic and descriptive.
+2. Fill out the **[Pull Request Template](.github/PULL_REQUEST_TEMPLATE.md)** completely.
+3. Ensure `npm run lint`, `npm test`, and `cargo test` pass with **zero warnings and zero errors**.
+4. Update relevant documentation in `docs/` or `ARCHITECTURE.md` if your PR modifies architecture, configuration, or IPC commands.
+5. If introducing a major architectural or security change, include an **[ADR](docs/adr/README.md)**.
+6. **Never commit credentials, API keys, or personal tokens**.
+
+---
+
+## Security Vulnerabilities
+
+Please **do not** report security vulnerabilities via public GitHub issues. Follow the confidential disclosure procedure documented in our **[SECURITY.md](./SECURITY.md)**.
