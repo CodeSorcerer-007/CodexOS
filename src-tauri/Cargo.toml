@@ -59,7 +59,7 @@ thiserror = "2.0"
 notify = "7"
 hyper = { version = "0.14", features = ["full"] }
 hyper-tls = "0.5"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 tiny_http = "0.12"
 tauri-plugin-single-instance = "2"
 
